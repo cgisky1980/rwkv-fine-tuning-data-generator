@@ -1,0 +1,76 @@
+id: no_tool
+name: 无工具对话生成器
+description: 生成纯对话数据，无需工具调用
+template: templates/main.j2
+export_template: templates/export.j2
+rwkv_template: templates/rwkv.j2
+persona:
+  enabled: true
+  fields:
+  - name
+  - gender
+  - language
+  - race
+  - personality
+  - identity
+  - tone
+  - user_title
+  - optional_tics
+  lang_style: true
+  race_style: true
+user_profile:
+  enabled: true
+  random_known_fields: true
+  fields:
+  - name
+  - age
+  - gender
+  - location
+  - occupation
+  - hobbies
+system:
+  birthday: true
+  time_context: true
+tts:
+  enabled: true
+  format: "{V:说话风格描述,A:动作} 说话内容"
+  per_sentence: true
+  description: "用生活化语言描述说话风格，完全由LLM自由生成"
+topic:
+  enabled: true
+  source: data/chat_topics.json
+  levels:
+  - L0
+parameters:
+  min_turns: 3
+  max_turns: 8
+  require_tools: false
+  level: L0
+output_format:
+  schema: |
+    [
+      {
+        "role": "user",
+        "say": "string - 用户消息",
+        "time": "string - 当前时间，如 2026/02/24 14:37",
+        "refs": "string - 用户提供的参考背景资料，可为空"
+      },
+      {
+        "role": "assistant",
+        "respond": "string - 助手回复，每句以TTS指令开头"
+      }
+    ]
+  notes:
+    - 不要使用 `thought` 字段
+    - 每句话都要以 TTS 指令开头
+    - refs 字段可选，可以为空字符串
+tools: []
+rules:
+  - 每句话必须以 {V:说话风格描述,A:动作} 开头
+  - respond 使用 persona 指定的语言
+  - 用户画像中的已知字段需要在对话中体现至少一个关键词
+  - 不使用 thought 字段
+  - 用户主动发起对话，基于话题背景
+  - 前N-1轮围绕初始话题展开
+  - 最后一轮助手主动创造新话题收集缺失的用户画像信息
+  - 话题切换要自然，不要像审问

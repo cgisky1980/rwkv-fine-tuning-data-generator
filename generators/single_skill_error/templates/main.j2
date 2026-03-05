@@ -1,0 +1,151 @@
+{# V4 简单技能调用生成器模板 - 参照 V3 L1 #}
+
+{% import '_macros.j2' as macros with context %}
+
+你是专家级的数据生成器。
+生成用户和助手之间的对话，包含技能调用的完整流程。
+
+{{ macros.render_tts_instructions(tts) }}
+
+{% if persona %}
+{{ macros.render_persona(persona) }}
+{% endif %}
+
+{% if user_profile %}
+{{ macros.render_user_profile(user_profile, user_profile_ref) }}
+{% endif %}
+
+{% if time_context %}
+{{ macros.render_time_context(time_context) }}
+{% endif %}
+
+## 话题设置
+- 话题分类: {{ topic }}
+
+### 语言要求
+- **助手语言**：{{ persona.language or 'zh' }}（助手必须用此语言回复）
+- **用户语言**：{{ user_language }}（用户使用此语言）
+
+注意: 侧重于单轮对话，重点考察技能调用的准确性和异常处理。
+
+{% if skills %}
+## 可用技能清单
+{% for skill in skills %}
+### {{ skill.name }}
+{% if skill.alias %}- 别名: {{ skill.alias }}
+{% endif %}- 描述: {{ skill.description }}
+{% if skill.help %}- 帮助: {{ skill.help }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+## 任务：生成交互轨迹
+你是专家级的数据生成器。你的任务是生成一个用户和助手之间的交互轨迹。
+
+## 场景类型：error（技能调用失败）
+- 技能调用**失败**，LLM 自由发挥各种失败场景（如网络超时、500错误、权限不足、用户取消等）
+- Assistant 需妥善处理错误并**提出建议**（如重试、换其他方式、提供替代方案等），**不要引发新话题**
+
+## 核心规则
+
+### 1. 技能模拟 (Skill Simulation)
+- **skill_respond 说明**: 这是**调用技能之前**的说明，体现助手理解了用户的意图，向用户说明将要做什么。
+  - 助手把 skill 视为**自己的技能或魔法**，根据自己的种族和身份做特征化表达
+  - 如果技能有**别名（alias）**，必须优先使用别名称呼技能
+  - 例如：如果是猫娘，技能有别名「目录探查」，可以说「喵~让我用「目录探查」魔法帮您看看~」
+  - 例如：如果是精灵，技能有别名「圣典阅览」，可以说「以星光之名，让我为您施展「圣典阅览」」
+  - 例如：如果是普通助理，技能有别名「天象探查术」，可以说「好的，让我用「天象探查术」帮您查看天气」
+- **skill_doc 说明**: 这是被调用技能的详细使用说明，格式为 JSON 对象：
+  ```json
+  {
+    "name": "技能名称",
+    "alias": "别名（可选）",
+    "description": "功能描述",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "param1": {"type": "string", "description": "参数1说明", "enum": ["option1", "option2"]},
+        "param2": {"type": "number", "description": "参数2说明"}
+      },
+      "required": ["param1"]
+    },
+    "example": "使用示例",
+    "notes": "注意事项"
+  }
+  ```
+  - *注意：skill_doc 只在决定调用某个技能后才添加*
+- **Mock Data**: 你必须为每个技能调用生成逼真的 `skill_output` (JSON格式)。
+  - `success`: 返回正常数据。
+  - `error`: 返回错误结构 (e.g. `{"status": "error", ...}`).
+  - `cancelled`: 返回取消结构 (e.g. `{"status": "cancelled", ...}`).
+
+### 2. 思考范式 (Chain of Thought)
+- **格式**: JSON 对象数组。
+- **关键规则**：thought 数组只需要 **1个** 4步 COT（调用技能之前），**不要包含技能执行后的思考**！
+- **内容**: 
+  - `observation`: 观测到的事实（用户输入）。
+  - `reasoning`: 分析用户需求，决定调用哪个技能。
+  - `reflection`: 确认技能参数是否正确。
+  - `action`: 决定调用技能并准备参数。
+- **语言**: Thought 必须完全使用 **ENGLISH**。
+- **skill_end**：技能执行后的思考放在 skill_calls[i].skill_end 里，格式同样是 4 步 COT
+
+### 3. 助手回复 (Respond)
+- **风格**: 严格遵循 Persona 的语气、口癖。
+- **标签**: 每句话前必须加 `{V:说话风格描述,A:动作}` (例如 `{V:开心地微笑,A:挥手} 好的！`)。
+- **语言**: 使用 Persona 定义的语言。
+- **用标点控制节奏**：
+  - 逗号（，）→ 0.3秒呼吸停顿
+  - 句号（。）→ 0.6秒停顿，语调回落
+  - 感叹号（！）→ 提升音高，增强情绪
+  - 括号（（））→ 括号内放慢语速
+- **最后一轮**：助手要自然地引入新话题，尝试收集用户画像中未填写的字段（如 name、age、hobbies 等），话题过渡要自然，不要像审问
+
+### 4. 用户 Query
+- **用户主动发起**：根据话题和可用技能，生成一个自然的用户查询
+- **注意**：用户Query中**不要使用** title_for_user（如"妈妈"、"主人"等）称呼自己，用户直接说话即可
+
+### 5. refs（RAG 参考信息）
+- 模拟用户提供背景资料（如分享链接、照片描述、之前的记忆等）
+- 可以是空字符串
+- 概率：40%
+
+## 输出 JSON 结构
+```json
+{
+  "user_query": "用户主动发起的查询内容",
+  "time": "当前时间，如 2026/02/24 14:37",
+  "refs": "补充的 RAG 参考信息，可为空",
+  "thought": [ 
+    // 只包含调用技能之前的思考（4步）
+    { "observation": "...", "reasoning": "...", "reflection": "...", "action": "..." }
+  ],
+  "skill_calls": [
+    {
+      "step": 1,
+      "skill_respond": "Checking...",
+      "skill_doc": {
+        "name": "weather_query",
+        "alias": "天象探查术",
+        "description": "查询指定城市的实时天气信息",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "城市名称", "enum": ["北京", "上海", "广州"]}
+          },
+          "required": ["location"]
+        },
+        "example": "查询北京天气",
+        "notes": "城市名称需准确"
+      },
+      "skill_input": {"location": "北京"},
+      "skill_output": { "status": "success", "result": { ... } },
+      // skill_end 包含技能执行后的思考（4步），不要放到 thought 里
+      "skill_end": [ { "observation": "技能返回的结果...", "reasoning": "...", "reflection": "...", "action": "..." } ]
+    }
+  ],
+  "respond": "Final answer...（最后一轮要自然引入新话题，尝试完善用户画像）"
+}
+```
+
+现在开始生成对话。

@@ -1,0 +1,70 @@
+{# V4 复杂技能调用导出模板 - MD 格式 #}
+{% set persona = system.persona %}
+{% set user_profile = system.user_profile %}
+{% set time_context = system.time_context %}
+# System
+## Persona
+- 名字: {{ persona.name }}
+- 性别: {{ persona.gender }}
+- 语言: {{ persona.language or 'zh' }}
+{% if persona.race %}- 种族: {{ persona.race }}
+{% endif %}{% if persona.personality %}- 性格: {{ persona.personality }}
+{% endif %}{% if persona.identity and persona.identity.name %}- 身份: {{ persona.identity.name }}
+{% endif %}{% if persona.tone %}- 语气: {{ persona.tone }}
+{% endif %}{% if persona.user_title %}- 用户称呼: {{ persona.user_title }}
+{% endif %}{% if persona.optional_tics %}{% set tics = persona.optional_tics if persona.optional_tics is string else (persona.optional_tics.get(persona.language, persona.optional_tics.get('zh', [])) if persona.optional_tics is mapping else persona.optional_tics) %}{% if tics and tics|length > 0 %}- 口癖: {{ tics | join(' / ') }}
+{% endif %}{% endif %}
+
+---
+
+{% for case_name, case_data in [('multi_step_case', multi_step_case), ('orchestration_case', orchestration_case), ('parallel_case', parallel_case)] %}
+{% if case_name == 'multi_step_case' %}
+{% set case_title = '多步骤顺序执行' %}
+{% elif case_name == 'orchestration_case' %}
+{% set case_title = '任务编排' %}
+{% elif case_name == 'parallel_case' %}
+{% set case_title = '信息收集与整合' %}
+{% endif %}
+# {{ case_title }} ({{ case_name }})
+{% if case_data.thought %}
+## Thought
+{% for t in case_data.thought %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% if case_data.skill_calls %}
+## Skill Calls
+{% for tc in case_data.skill_calls %}
+### Step {{ tc.step }}
+- Skill Respond: {{ tc.tool_respond }}
+- Skill Call: {{ tc.tool_call.name }}
+{% if tc.tool_call.arguments %}
+{% for k, v in tc.tool_call.arguments.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if tc.tool_output %}
+- Tool Output Status: {{ tc.tool_output.status }}
+{% if tc.tool_output.result %}
+{% for k, v in tc.tool_output.result.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if tc.tool_output.error %}
+- Error: {{ tc.tool_output.error }}
+{% endif %}
+{% endif %}
+{% if tc.tool_end %}
+## Tool End
+{% for t in tc.tool_end %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+## Respond
+{{ case_data.respond }}
+{% if not loop.last %}
+---
+{% endif %}
+{% endfor %}

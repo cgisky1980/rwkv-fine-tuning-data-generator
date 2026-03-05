@@ -1,0 +1,254 @@
+{
+  "version": "4.0",
+  "description": "V4 话题配置 - 围绕技能使用场景设计",
+  "skill_categories": {
+    "theme_media": ["theme_set_season", "theme_set_weather", "background_audio_control", "theme_set_effects", "assistant_voice_control", "weather_api", "theme_list_presets"],
+    "filesystem": ["delete_file", "write_file", "read_file"],
+    "communication": ["send_message"],
+    "system": ["execute_command"],
+    "folder": ["list_directory", "search_files", "open_folder"],
+    "application": ["open_application"],
+    "todo": ["create_todo", "update_todo", "delete_todo", "list_todos", "search_todos"],
+    "script_execution": ["puppet"]
+  },
+  "topics": [
+    {
+      "category": "主题氛围",
+      "description": "关于界面主题、背景音效、天气效果等氛围相关的话题",
+      "suitable_skill_categories": ["theme_media"],
+      "levels": {
+        "L0": {
+          "topic": "主题氛围闲聊",
+          "dialogue_pattern": "用户简单提及对界面的感受或氛围的喜好，助手友好回应，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "主题氛围调整",
+          "dialogue_pattern": "用户请求调整主题、天气效果或背景音乐，助手引导或直接调用相应技能"
+        },
+        "L2": {
+          "topic": "个性化氛围设置",
+          "dialogue_pattern": "用户希望根据场景或心情设置特定氛围，助手询问偏好后提供个性化建议并执行"
+        },
+        "L3": {
+          "topic": "复杂氛围管理",
+          "dialogue_pattern": "用户需要组合使用多个主题和音效技能来创建复杂氛围，涉及多次技能调用和调整"
+        }
+      }
+    },
+    {
+      "category": "文件管理",
+      "description": "关于文件读写、文件夹操作等文件管理相关的话题",
+      "suitable_skill_categories": ["filesystem", "folder"],
+      "levels": {
+        "L0": {
+          "topic": "文件管理基础",
+          "dialogue_pattern": "用户简单提及文件相关话题，助手友好回应，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "文件操作请求",
+          "dialogue_pattern": "用户请求读取、写入或查看文件内容，助手调用相应技能完成操作"
+        },
+        "L2": {
+          "topic": "文件管理咨询",
+          "dialogue_pattern": "用户就文件组织、存储位置或文件类型选择寻求建议，助手分析需求并提供指导"
+        },
+        "L3": {
+          "topic": "复杂文件操作",
+          "dialogue_pattern": "用户需要执行复杂的文件管理任务，如批量处理、文件搜索或项目结构规划，涉及多个技能协同"
+        },
+        "L4": {
+          "topic": "文件整理与闲聊",
+          "dialogue_pattern": "用户在整理文件或清理空间时与助手闲聊，助手在执行文件操作的同时回应用户的感慨或吐槽"
+        }
+      }
+    },
+    {
+      "category": "消息发送",
+      "description": "关于发送消息、邮件、通知等通信相关的话题",
+      "suitable_skill_categories": ["communication"],
+      "levels": {
+        "L0": {
+          "topic": "消息话题闲聊",
+          "dialogue_pattern": "用户简单提及通信相关话题，助手轻松回应，不深入讨论"
+        },
+        "L1": {
+          "topic": "消息发送请求",
+          "dialogue_pattern": "用户请求发送消息到指定联系人或平台，助手调用技能执行发送"
+        },
+        "L2": {
+          "topic": "消息策略咨询",
+          "dialogue_pattern": "用户就消息发送时机、内容编辑或沟通策略寻求建议，助手提供专业指导"
+        },
+        "L3": {
+          "topic": "复杂消息协调",
+          "dialogue_pattern": "用户需要管理复杂的通信任务，可能涉及多平台消息协调或重要信息的多次确认"
+        }
+      }
+    },
+    {
+      "category": "系统操作",
+      "description": "关于系统命令执行、系统设置等系统操作相关的话题",
+      "suitable_skill_categories": ["system"],
+      "levels": {
+        "L0": {
+          "topic": "系统操作认知",
+          "dialogue_pattern": "用户提及系统相关话题，助手简单介绍，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "系统命令执行",
+          "dialogue_pattern": "用户请求执行特定系统命令（如查看信息、运行脚本等），助手评估后调用技能执行"
+        },
+        "L2": {
+          "topic": "系统操作咨询",
+          "dialogue_pattern": "用户就系统管理、命令选择或执行策略寻求建议，助手提供详细指导"
+        },
+        "L3": {
+          "topic": "高级系统管理",
+          "dialogue_pattern": "用户需要执行复杂的系统管理任务，涉及命令组合、参数调优或自动化脚本执行"
+        }
+      }
+    },
+    {
+      "category": "文件夹操作",
+      "description": "关于浏览文件夹、搜索文件、打开目录等文件夹操作相关的话题",
+      "suitable_skill_categories": ["folder"],
+      "levels": {
+        "L0": {
+          "topic": "文件夹基础",
+          "dialogue_pattern": "用户简单提及文件夹或目录相关话题，助手轻松回应"
+        },
+        "L1": {
+          "topic": "文件夹浏览请求",
+          "dialogue_pattern": "用户请求查看文件夹内容或搜索特定文件，助手调用技能完成操作"
+        },
+        "L2": {
+          "topic": "文件组织咨询",
+          "dialogue_pattern": "用户就文件组织方式、目录结构设计或高效搜索策略寻求建议，助手提供专业方案"
+        },
+        "L3": {
+          "topic": "复杂文件搜索",
+          "dialogue_pattern": "用户需要执行复杂的文件管理任务，可能涉及多目录搜索、批量整理或项目结构规划"
+        }
+      }
+    },
+    {
+      "category": "应用启动",
+      "description": "关于打开应用程序、切换软件等应用使用相关的话题",
+      "suitable_skill_categories": ["application"],
+      "levels": {
+        "L0": {
+          "topic": "应用使用闲聊",
+          "dialogue_pattern": "用户简单提及应用使用话题，助手友好互动"
+        },
+        "L1": {
+          "topic": "应用启动请求",
+          "dialogue_pattern": "用户请求打开特定应用程序，助手调用技能启动应用"
+        },
+        "L2": {
+          "topic": "应用选择咨询",
+          "dialogue_pattern": "用户就完成特定任务应使用哪个应用寻求建议，助手分析需求并推荐合适的应用"
+        },
+        "L3": {
+          "topic": "多应用协调",
+          "dialogue_pattern": "用户需要协调使用多个应用完成复杂任务，助手提供应用组合方案和切换策略"
+        }
+      }
+    },
+    {
+      "category": "待办管理",
+      "description": "关于创建、更新、查询、删除待办事项等任务管理相关的话题",
+      "suitable_skill_categories": ["todo"],
+      "levels": {
+        "L0": {
+          "topic": "待办事项闲聊",
+          "dialogue_pattern": "用户简单提及待办或任务管理话题，助手轻松回应，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "待办操作请求",
+          "dialogue_pattern": "用户请求创建、更新、查询或删除待办事项，助手调用相应技能完成操作"
+        },
+        "L2": {
+          "topic": "待办管理咨询",
+          "dialogue_pattern": "用户就待办事项的组织方式、优先级设置或任务规划策略寻求建议，助手提供专业方案"
+        },
+        "L3": {
+          "topic": "复杂任务管理",
+          "dialogue_pattern": "用户需要管理复杂的任务体系，可能涉及多个待办事项的协调、批量操作或项目级任务规划"
+        },
+        "L4": {
+          "topic": "生活规划与闲聊",
+          "dialogue_pattern": "用户在规划日程或添加待办时分享生活琐事，助手在记录任务的同时与用户进行情感交流"
+        }
+      }
+    },
+    {
+      "category": "脚本执行",
+      "description": "关于在沙箱中执行Python脚本的相关话题",
+      "suitable_skill_categories": ["script_execution"],
+      "levels": {
+        "L0": {
+          "topic": "脚本执行闲聊",
+          "dialogue_pattern": "用户简单提及脚本或自动化话题，助手轻松回应，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "脚本执行请求",
+          "dialogue_pattern": "用户请求执行指定的Python脚本，助手调用技能执行"
+        },
+        "L2": {
+          "topic": "脚本参数配置",
+          "dialogue_pattern": "用户需要为脚本传递参数或设置执行超时时间，助手协助配置并执行"
+        },
+        "L3": {
+          "topic": "复杂脚本任务",
+          "dialogue_pattern": "用户需要执行复杂的脚本任务，可能涉及多个脚本的协调、参数传递或结果处理"
+        }
+      }
+    },
+    {
+      "category": "音乐控制",
+      "description": "关于背景音乐播放、暂停、音量调节等音频控制相关的话题",
+      "suitable_skill_categories": ["theme_media"],
+      "levels": {
+        "L0": {
+          "topic": "音乐话题闲聊",
+          "dialogue_pattern": "用户简单提及音乐或音频话题，助手轻松回应，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "音乐播放控制",
+          "dialogue_pattern": "用户请求播放、暂停、切换背景音乐或调节音量，助手调用相应技能"
+        },
+        "L2": {
+          "topic": "音乐场景设置",
+          "dialogue_pattern": "用户希望根据场景或心情设置背景音乐，助手询问偏好后推荐并播放"
+        },
+        "L3": {
+          "topic": "音乐氛围组合",
+          "dialogue_pattern": "用户需要将音乐与主题、天气效果等组合创建特定氛围，涉及多个技能协同"
+        }
+      }
+    },
+    {
+      "category": "综合使用",
+      "description": "涉及多种技能组合使用的复杂场景",
+      "suitable_skill_categories": ["theme_media", "filesystem", "folder", "application", "todo", "script_execution"],
+      "levels": {
+        "L0": {
+          "topic": "技能概念认知",
+          "dialogue_pattern": "用户提及技能使用相关话题，助手简单介绍技能功能，不涉及具体操作"
+        },
+        "L1": {
+          "topic": "简单技能使用",
+          "dialogue_pattern": "用户请求使用单个技能完成简单任务，助手直接调用相应技能"
+        },
+        "L2": {
+          "topic": "技能组合咨询",
+          "dialogue_pattern": "用户需要使用多个技能完成一个任务，助手规划技能使用顺序并逐步执行"
+        },
+        "L3": {
+          "topic": "复杂任务编排",
+          "dialogue_pattern": "用户需要执行复杂的多步骤任务，涉及多种技能的智能组合和协调使用"
+        }
+      }
+    }
+  ]
+}

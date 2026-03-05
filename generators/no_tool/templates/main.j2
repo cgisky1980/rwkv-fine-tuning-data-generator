@@ -1,0 +1,92 @@
+{# V4 无工具对话生成器模板 #}
+{# 生成纯对话数据，无需工具调用 #}
+
+{% import '_macros.j2' as macros with context %}
+
+你是一个对话数据生成器。
+生成用户和助手之间的多轮自然对话。
+
+{{ macros.render_tts_instructions(tts) }}
+
+## 对话话题
+**{{ topic }}**
+
+{{ macros.render_persona(persona) }}
+
+## 用户画像（固定字段）
+{% if user_profile %}
+- name: {{ user_profile.get('name', '') }}
+- age: {{ user_profile.get('age', '') }}
+- gender: {{ user_profile.get('gender', '') }}
+- location: {{ user_profile.get('location', '') }}
+- occupation: {{ user_profile.get('occupation', '') }}
+- hobbies: {{ user_profile.get('hobbies', '') }}
+{% endif %}
+
+**用户画像使用规则**：
+- 已填写的字段：对话中自然体现，如用户叫"小明"，助手可以叫"小明"或昵称
+- 未填写的字段（空）：最后一轮助手自然地询问收集，不要生硬
+- 示例：如果 hobbies 为空，助手可以说"你平时喜欢做什么呀？"而不是"请告诉我你的爱好"
+
+{{ macros.render_time_context(time_context) }}
+
+## 助手生日（涌现属性）
+{{ birthday }}
+
+## 对话要求
+
+### 语言要求
+- **助手语言**：{{ persona.language or 'zh' }}（助手必须用此语言回复）
+- **用户语言**：{{ user_language }}（用户使用此语言）
+{% if user_language != persona.language %}
+- **跨语言场景**：用户和助手使用不同语言，助手应理解用户语言并用助手语言回复
+{% endif %}
+
+### 用户消息要求
+- 用户消息必须**自然且多样**
+- 用户根据话题背景**主动发起对话**
+- 消息长度要有变化：有时短（1-2个词），有时较长
+- 用户可以使用口语、俚语或正式语
+- 避免模板化表达，如 "User turn 1"、"User message..."
+
+### refs字段说明
+用户消息可包含 **refs** 字段，模拟用户提供背景资料（如分享链接、照片描述、之前的记忆等），可为空字符串。助手应自然参考refs内容回复。
+
+### time字段说明
+每条用户消息都包含 **time** 字段，表示当前对话时间。格式如：2026/02/24 14:37
+
+**示例：**
+```
+用户: 你看这个新闻！
+time: "2026/02/24 14:37"
+refs: "今日科技新闻：某公司发布新款AI助手，支持多轮对话和情感识别..."
+
+助手: {V:像发现宝藏一样好奇,A:凑近} 哇，这个AI助手听起来好厉害！居然还能识别情感？...{V:带着期待的眼神} 以后我们聊天它是不是能知道我开不开心呀？
+```
+
+### 助手回复要求
+- 每句话都必须以 TTS 指令格式 `{V:说话风格描述,A:动作}` 开头
+- 回复要体现 Persona 的语气风格
+- 对话要自然流畅，用户驱动对话
+- **用标点控制节奏**：
+  - 逗号（，）→ 0.3秒呼吸停顿
+  - 句号（。）→ 0.6秒停顿，语调回落
+  - 感叹号（！）→ 提升音高，增强情绪
+  - 括号（（））→ 括号内放慢语速
+- **最后一轮**：助手要自然地引入新话题，尝试收集用户画像中未填写的字段（如 name、age、hobbies 等），话题过渡要自然，不要像审问
+
+### 对话轮数
+生成 {{ turn_count }} 轮对话。
+
+## 输出格式
+
+```json
+{{ output_format.schema }}
+```
+
+**重要**：
+{% for note in output_format.notes %}
+- {{ note }}
+{% endfor %}
+
+现在开始生成对话。

@@ -1,0 +1,68 @@
+<div id="create-generator-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: var(--bg-card); border-radius: 16px; padding: 30px; max-width: 700px; width: 90%; border: 1px solid var(--border-color); max-height: 90vh; overflow-y: auto;">
+        <div class="card-title" style="margin-bottom: 20px;">➕ 新建生成器</div>
+        
+        <div class="form-group">
+            <label>ID (小写字母、数字、下划线)</label>
+            <input type="text" id="new-gen-id" placeholder="例如: code_assistant">
+        </div>
+        
+        <div class="form-group">
+            <label>名称</label>
+            <input type="text" id="new-gen-name" placeholder="例如: 代码助手">
+        </div>
+        
+        <div class="form-group">
+            <label>描述</label>
+            <input type="text" id="new-gen-description" placeholder="描述这个生成器的用途">
+        </div>
+        
+        <div class="form-group">
+            <label>初始模板内容</label>
+            <textarea id="new-gen-template" rows="15"
+                style="width: 100%; padding: 12px; border: 2px solid var(--border-color);
+                       border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary);
+                       font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem;"
+                placeholder="# Your template here..."></textarea>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-primary" onclick="createGenerator()">创建</button>
+            <button class="btn btn-secondary" onclick="closeCreateGeneratorModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<div id="add-topic-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: var(--bg-card); border-radius: 16px; padding: 30px; max-width: 600px; width: 90%; border: 1px solid var(--border-color); max-height: 90vh; overflow-y: auto;">
+        <div class="card-title" style="margin-bottom: 20px;">➕ 新增话题</div>
+        
+        <div class="form-group">
+            <label>所属分类</label>
+            <select id="new-topic-parent-category" onchange="onParentCategoryChange()">
+                <option value="">-- 选择已有分类 --</option>
+                <option value="__new__">+ 创建新分类</option>
+            </select>
+        </div>
+        
+        <div id="new-category-input" class="form-group" style="display: none;">
+            <label>新分类名称</label>
+            <input type="text" id="new-parent-category-name" placeholder="例如：体育运动">
+        </div>
+        
+        <div class="form-group">
+            <label>话题名称</label>
+            <input type="text" id="new-topic-name" placeholder="例如：健身指导">
+        </div>
+        
+        <div class="form-group">
+            <label>话题描述</label>
+            <input type="text" id="new-topic-description" placeholder="描述这个话题的内容，例如：运动健身、减脂增肌、健康饮食建议">
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-primary" onclick="submitNewTopic()">确认添加</button>
+            <button class="btn btn-secondary" onclick="closeAddTopicModal()">取消</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ai00 RWKV Data Generator - Task Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0a0a; --bg-secondary: #141414; --bg-card: #1e1e1e; --bg-hover: #2a2a2a;
+            --border-color: #333; --text-primary: #ffffff; --text-secondary: #a0a0a0;
+            --accent-yellow: #ffd700; --accent-green: #00ff88; --accent-red: #ff4444;
+            --accent-blue: #00d4ff; --accent-purple: #b44aff; --accent-orange: #ff9d00;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, var(--bg-primary) 0%, #0f0f1a 100%); color: var(--text-primary); min-height: 100vh; line-height: 1.6; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        header { text-align: center; padding: 30px 0; margin-bottom: 30px; background: linear-gradient(180deg, rgba(255,215,0,0.1) 0%, transparent 100%); border-bottom: 2px solid var(--border-color); }
+        h1 { font-size: 2.8rem; background: linear-gradient(90deg, var(--accent-yellow), var(--accent-green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; text-shadow: 0 0 30px rgba(255,215,0,0.3); }
+        .subtitle { color: var(--text-secondary); font-size: 1.1rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: linear-gradient(145deg, var(--bg-card), var(--bg-secondary)); border-radius: 16px; padding: 24px; border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform 0.3s, box-shadow 0.3s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 20px rgba(255,215,0,0.05); }
+        .card-title { font-size: 1.3rem; margin-bottom: 20px; color: var(--accent-yellow); display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9rem; }
+        input, select { width: 100%; padding: 12px 14px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; transition: all 0.3s; }
+        input:focus, select:focus { outline: none; border-color: var(--accent-yellow); box-shadow: 0 0 10px rgba(255,215,0,0.2); }
+        input[type="range"] { padding: 5px 0; }
+        .ratio-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .ratio-item { text-align: center; }
+        .ratio-item label { font-size: 0.8rem; margin-bottom: 4px; }
+        .ratio-item input { text-align: center; padding: 8px; }
+        .btn { padding: 14px 28px; border: none; border-radius: 10px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; background: var(--accent-green); color: #000; box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0, 255, 136, 0.5); }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-yellow), #ffed4e); color: #000; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6); }
+        .btn-secondary { background: linear-gradient(135deg, var(--accent-green), #00cc6a); color: #000; margin-left: 10px; box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3); }
+        .btn-secondary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0, 255, 136, 0.5); }
+        .task-list { max-height: 500px; overflow-y: auto; }
+        .task-item { background: linear-gradient(145deg, var(--bg-secondary), var(--bg-card)); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); transition: all 0.3s; position: relative; overflow: hidden; }
+        .task-item::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent-yellow), var(--accent-green)); }
+        .task-item:hover { border-color: var(--accent-yellow); box-shadow: 0 4px 20px rgba(255,215,0,0.1); }
+        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .task-name { font-weight: 700; font-size: 1.1rem; color: var(--text-primary); }
+        .task-status { padding: 6px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+        .status-pending { background: #444; color: #fff; }
+        .status-running { background: linear-gradient(90deg, var(--accent-yellow), #ffed4e); color: #000; animation: pulse 2s infinite; }
+        .status-completed { background: var(--accent-green); color: #000; }
+        .status-failed { background: var(--accent-red); color: #fff; }
+        .status-cancelled { background: #666; color: #fff; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .progress-section { margin: 15px 0; }
+        .progress-bar { width: 100%; height: 12px; background: var(--bg-card); border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-yellow), var(--accent-green)); transition: width 0.5s ease; box-shadow: 0 0 10px rgba(0,255,136,0.5); position: relative; }
+        .progress-fill::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite; }
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .progress-text { text-align: center; margin-top: 8px; font-weight: 600; color: var(--accent-green); }
+        .task-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 0.85rem; color: var(--text-secondary); margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        .stat-item { text-align: center; }
+        .stat-value { font-weight: 700; color: var(--accent-yellow); font-size: 1rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px; }
+        .stat-box { background: linear-gradient(145deg, var(--bg-secondary), var(--bg-card)); padding: 20px; border-radius: 12px; text-align: center; border: 1px solid var(--border-color); transition: all 0.3s; }
+        .stat-box:hover { border-color: var(--accent-yellow); transform: translateY(-2px); }
+        .stat-box-value { font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, var(--accent-yellow), var(--accent-green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-box-label { font-size: 0.9rem; color: var(--text-secondary); margin-top: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; flex-wrap: wrap; }
+        .tab { padding: 12px 24px; cursor: pointer; border-radius: 8px; transition: all 0.3s; font-weight: 600; border: 2px solid transparent; }
+        .tab.active { background: linear-gradient(135deg, var(--accent-yellow), #ffed4e); color: #000; box-shadow: 0 4px 15px rgba(255,215,0,0.3); }
+        .tab:hover:not(.active) { background: var(--bg-secondary); border-color: var(--border-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .chart-container { background: var(--bg-secondary); border-radius: 12px; padding: 20px; margin-top: 15px; border: 1px solid var(--border-color); height: 250px; position: relative; }
+        .chart-title { color: var(--accent-yellow); margin-bottom: 15px; font-weight: 600; }
+        .alert { padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; border: 2px solid; }
+        .alert-info { background: rgba(0, 212, 255, 0.1); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .alert-success { background: rgba(0, 255, 136, 0.1); border-color: var(--accent-green); color: var(--accent-green); }
+        .alert-error { background: rgba(255, 68, 68, 0.1); border-color: var(--accent-red); color: var(--accent-red); }
+        .worker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 15px; }
+        .worker-card { background: var(--bg-secondary); padding: 15px; border-radius: 10px; text-align: center; border: 2px solid var(--border-color); transition: all 0.3s; }
+        .worker-card.active { border-color: var(--accent-green); background: rgba(0, 255, 136, 0.1); animation: worker-pulse 1.5s infinite; }
+        @keyframes worker-pulse { 0%, 100% { box-shadow: 0 0 5px rgba(0,255,136,0.3); } 50% { box-shadow: 0 0 15px rgba(0,255,136,0.6); } }
+        .worker-id { font-weight: 700; color: var(--accent-yellow); }
+        .worker-status { font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px; }
+        .distribution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .dimension-card { background: var(--bg-secondary); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); height: 350px; display: flex; flex-direction: column; }
+        .dimension-card canvas { flex: 1; min-height: 0; }
+        .dimension-title { color: var(--accent-yellow); font-weight: 600; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+        .progress-curve-container { height: 300px; margin-top: 20px; position: relative; overflow: hidden; }
+        .progress-curve-container canvas, .chart-container canvas { max-height: 100% !important; }
+        .real-time-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 255, 136, 0.1); border: 1px solid var(--accent-green); border-radius: 20px; font-size: 0.85rem; color: var(--accent-green); margin-left: 15px; }
+        .live-dot { width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .export-task-item { background: var(--bg-secondary); padding: 12px 15px; border-radius: 8px; margin: 8px 0; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); }
+        .export-task-item:hover { border-color: var(--accent-yellow); background: var(--bg-hover); }
+        .export-task-item input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent-yellow); }
+        .log-container { background: var(--bg-secondary); border-radius: 8px; padding: 15px; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; color: var(--accent-green); border: 1px solid var(--border-color); }
+        .log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .json-tree-node { margin: 2px 0; }
+        .json-tree-header { padding: 2px 0; border-radius: 4px; transition: background 0.2s; }
+        .json-tree-header:hover { background: rgba(255, 255, 255, 0.05); }
+        .json-tree-leaf { padding: 2px 0; }
+        .json-tree-children { border-left: 1px dashed var(--border-color); margin-left: 7px; padding-left: 8px; }
+        .json-toggle-icon { transition: transform 0.2s; cursor: pointer; }
+        .json-key { font-weight: 600; }
+        .json-count { font-style: italic; }
+        #filter-sidebar { scrollbar-width: thin; scrollbar-color: var(--border-color) var(--bg-secondary); }
+        #filter-sidebar::-webkit-scrollbar { width: 6px; }
+        #filter-sidebar::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        #filter-sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        #filter-sidebar label:hover { color: var(--accent-yellow); }
+        .eta-display { font-size: 1.2rem; font-weight: 700; color: var(--accent-yellow); margin-top: 10px; }
+        .speed-display { display: inline-block; padding: 8px 16px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); border-radius: 20px; font-weight: 700; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Ai00 RWKV Data Generator</h1>
+            <p class="subtitle">Advanced Task Management System with Distribution Control</p>
+        </header>
+        <div id="alert-container"></div>
+        <div class="tabs" id="main-tabs">
+            <div class="tab active" data-tab="create" onclick="switchTab('create', this)">创建任务</div>
+            <div class="tab" data-tab="tasks" onclick="switchTab('tasks', this)">任务队列</div>
+            <div class="tab" data-tab="monitor" onclick="switchTab('monitor', this)">实时监控</div>
+            <div class="tab" data-tab="stats" onclick="switchTab('stats', this)">数据统计</div>
+            <div class="tab" data-tab="export" onclick="switchTab('export', this)">数据导出</div>
+            <div class="tab" data-tab="generators" onclick="switchTab('generators', this)">生成器管理</div>
+            <div class="tab" data-tab="providers" onclick="switchTab('providers', this)">LLM服务商</div>
+        </div>
+
+        <div id="tab-create" class="tab-content active">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">⚙️ 基本配置</div>
+                    <div class="form-group">
+                        <label>任务名称</label>
+                        <input type="text" id="task-name" placeholder="输入任务名称" oninput="checkTaskNameUnique()">
+                        <div id="task-name-error" style="color: var(--accent-red); font-size: 0.85rem; margin-top: 5px; display: none;"></div>
+                        <div id="existing-tasks-hint" style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 5px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>生成器类型</label>
+                        <select id="generator-type" onchange="onGeneratorTypeChange()"><option value="">加载中...</option></select>
+                    </div>
+                    <div id="generator-description" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 5px; margin-bottom: 15px;">选择一个生成器类型</div>
+                    <div class="form-group">
+                        <label>生成数量</label>
+                        <input type="number" id="count" value="100" min="1" max="10000">
+                    </div>
+                    <div class="form-group">
+                        <label>Temperature: <span id="temp-value" style="color: var(--accent-yellow); font-weight: 700;">0.7</span></label>
+                        <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" oninput="document.getElementById('temp-value').textContent=this.value">
+                    </div>
+                    <div class="form-group">
+                        <label>并发数 (线程数)</label>
+                        <input type="number" id="concurrency" value="4" min="1" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key (可选)</label>
+                        <input type="text" id="api-key" placeholder="默认使用 sk-test">
+                    </div>
+                    <div class="form-group">
+                        <label>LLM 服务商 (可选)</label>
+                        <select id="provider-id" onchange="onProviderChange()">
+                            <option value="">-- 使用API Key 或默认 --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">🌍 语言比例分配</div>
+                    <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">各语言比例总和必须等于100%</p>
+                    <div class="ratio-grid">
+                        <div class="ratio-item"><label>中文 (ZH)</label><input type="number" id="lang-zh" value="70" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>英文 (EN)</label><input type="number" id="lang-en" value="15" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>日文 (JA)</label><input type="number" id="lang-ja" value="2" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>韩文 (KO)</label><input type="number" id="lang-ko" value="2" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>德文 (DE)</label><input type="number" id="lang-de" value="3" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>法文 (FR)</label><input type="number" id="lang-fr" value="3" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>西班牙 (ES)</label><input type="number" id="lang-es" value="3" min="0" max="100" onchange="validateLangRatios()"></div>
+                        <div class="ratio-item"><label>俄文 (RU)</label><input type="number" id="lang-ru" value="2" min="0" max="100" onchange="validateLangRatios()"></div>
+                    </div>
+                    <div id="lang-ratio-total" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px; text-align: center; font-weight: 600;">总计: 100%</div>
+                    <div id="topic-section" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                        <div class="card-title" style="font-size: 1.1rem; margin-bottom: 12px;">📝 话题范围配置</div>
+                        <p style="color: #888; margin-bottom: 15px; font-size: 0.85rem;">选择要包含的话题分类，留空则使用全部话题</p>
+                        <div id="topic-checkboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;"><p style="color: #666; grid-column: span 2;">加载中...</p></div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn" style="padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: #fff;" onclick="selectAllTopics()">全选</button>
+                            <button class="btn" style="padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: #fff;" onclick="deselectAllTopics()">全不选</button>
+                            <button class="btn" style="padding: 8px 16px;" onclick="openAddTopicModal()">➕ 新增话题</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <div class="card-title" style="cursor: pointer;" onclick="toggleCustomPrompts()">
+                    <span id="custom-prompts-toggle">📋 生成器模板</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 10px;">（可选）</span>
+                </div>
+                <div id="custom-prompts-section" style="display: none;">
+                    <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">为此任务自定义生成器模板，留空则使用生成器默认配置。</p>
+                    <div class="form-group">
+                        <label>模板内容 <span id="current-generator-label" style="color: var(--accent-yellow);"></span></label>
+                        <textarea id="custom-prompt-content" rows="10" style="width: 100%; padding: 12px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem;" placeholder="留空使用生成器默认模板..."></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" style="padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: #fff;" onclick="applyDefaultPrompts()">使用默认模板</button>
+                        <button class="btn" style="padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: #fff;" onclick="clearCustomPrompts()">清空自定义</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <div style="padding: 10px 0;">
+                    <button class="btn btn-primary" onclick="createTask()">🚀 创建任务</button>
+                    <button class="btn btn-secondary" onclick="resetForm()">🔄 重置</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-tasks" class="tab-content">
+            <div class="grid">
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-title">📋 任务队列</div>
+                    <div id="task-list" class="task-list"><p style="color: #888; text-align: center; padding: 40px;">暂无任务</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-monitor" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">📈 实时进度曲线<span class="real-time-indicator" style="display: none;" id="monitor-live-badge"><span class="live-dot"></span>LIVE</span></div>
+                    <div class="progress-curve-container"><canvas id="progressChart"></canvas></div>
+                    <div id="monitor-stats" style="margin-top: 20px; text-align: center;">
+                        <div class="speed-display">⚡ 0.0 条/分钟</div>
+                        <div class="eta-display">⏱️ ETA: --:--:--</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">👷 工作线程状态</div>
+                    <div id="worker-grid" class="worker-grid"><p style="color: #888; text-align: center; grid-column: span 4;">暂无运行中的任务</p></div>
+                    <div class="chart-container" style="margin-top: 20px; height: 200px;">
+                        <div class="chart-title">线程活跃度</div>
+                        <canvas id="workerChart"></canvas>
+                    </div>
+                </div>
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-title">📝 实时日志</div>
+                    <div id="log-container" class="log-container"><div class="log-entry">系统就绪，等待任务...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-stats" class="tab-content">
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-title">📊 系统概览</div>
+                <div class="stats-grid">
+                    <div class="stat-box"><div class="stat-box-value" id="stat-total-tasks">0</div><div class="stat-box-label">总任务数</div></div>
+                    <div class="stat-box"><div class="stat-box-value" id="stat-total-records">0</div><div class="stat-box-label">总记录数</div></div>
+                    <div class="stat-box"><div class="stat-box-value" id="stat-running" style="color: var(--accent-yellow);">0</div><div class="stat-box-label">运行中</div></div>
+                    <div class="stat-box"><div class="stat-box-value" id="stat-completed" style="color: var(--accent-green);">0</div><div class="stat-box-label">已完成</div></div>
+                </div>
+            </div>
+            <div class="distribution-grid" id="distribution-charts"></div>
+        </div>
+
+        <div id="tab-export" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">📤 RWKV 导出</div>
+                    <p style="color: #888; margin-bottom: 15px;">选择已完成的任务进行导出（使用生成器对应的 RWKV 模板）</p>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="export-shuffle" checked style="width: auto; margin-right: 8px;">打乱顺序（防止过拟合）</label>
+                        <label><input type="checkbox" id="export-merge-by-type" style="width: auto; margin-right: 8px;">按类型合并（生成多个文件）</label>
+                    </div>
+                    <div id="export-task-list" style="margin: 20px 0; max-height: 300px; overflow-y: auto;"><p style="color: #888;">加载可用任务...</p></div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" id="preview-export-btn" onclick="previewExport()">👁️ 预览</button>
+                        <button class="btn btn-primary" onclick="exportRWKV()">📦 导出 RWKV 格式</button>
+                        <button class="btn btn-secondary" onclick="exportBinidx()">🗜️ 导出 binidx</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📜 导出历史</div>
+                    <div id="export-history"><p style="color: #888; text-align: center; padding: 40px;">暂无导出记录</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-generators" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">⚙️ 生成器列表</div>
+                    <p style="color: #888; margin-bottom: 15px;">管理可用的数据生成器</p>
+                    <div id="generators-list" style="margin-bottom: 20px;"><p style="color: #666;">加载中...</p></div>
+                    <button class="btn btn-primary" onclick="openCreateGeneratorModal()">➕ 新建生成器</button>
+                </div>
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-title" id="generator-editor-title">✏️ 生成器配置</div>
+                    <div id="generator-editor-container"><p style="color: #888; text-align: center; padding: 40px;">从左侧选择一个生成器进行编辑</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-providers" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">🔌 LLM 服务商配置</div>
+                    <p style="color: #888; margin-bottom: 15px;">配置和管理 LLM 服务商</p>
+                    <div id="providers-list" style="margin-bottom: 20px;"><p style="color: #666;">加载中...</p></div>
+                    <button class="btn btn-primary" onclick="openAddProviderModal()">➕ 新增服务商</button>
+                </div>
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-title" id="provider-editor-title">✏️ 服务商配置</div>
+                    <div id="provider-editor-container"><p style="color: #888; text-align: center; padding: 40px;">从左侧选择一个服务商进行配置</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/constants.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/tasks.js"></script>
+    <script src="/static/js/data-viewer.js"></script>
+    <script src="/static/js/export.js"></script>
+    <script src="/static/js/generators.js"></script>
+    <script src="/static/js/topics.js"></script>
+    <script src="/static/js/monitor.js"></script>
+    <script src="/static/js/providers.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

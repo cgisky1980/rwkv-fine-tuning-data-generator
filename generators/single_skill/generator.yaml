@@ -1,0 +1,81 @@
+id: single_skill
+name: 简单技能调用生成器
+description: 生成简单技能调用的对话数据，参照 V3 L1 设计
+template: templates/main.j2
+export_template: templates/export.j2
+rwkv_template: templates/rwkv.j2
+persona:
+  enabled: true
+  fields:
+  - name
+  - gender
+  - language
+  - race
+  - personality
+  - identity
+  - tone
+  - user_title
+  - optional_tics
+  - allowed_emotions
+  - allowed_actions
+  lang_style: true
+  race_style: true
+user_profile:
+  enabled: true
+  random_known_fields: true
+  fields:
+  - name
+  - age
+  - gender
+  - location
+  - occupation
+  - hobbies
+system:
+  birthday: true
+  time_context: true
+tts:
+  enabled: true
+  format: "{V:说话风格描述,A:动作} 说话内容"
+  per_sentence: true
+topic:
+  enabled: true
+  source: data/chat_topics.json
+  levels:
+  - L1
+parameters:
+  refs_min: 0
+  refs_max: 3
+  refs_probability: 0.4
+  skills_per_record: 1
+  level: L1
+tools:
+  source: data/skills_config.json
+output_format:
+  schema: |
+    {
+      "user_query": "用户主动发起的查询内容，基于话题和可用技能自然生成",
+      "time": "当前时间，如 2026/02/24 14:37",
+      "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "..." } ],
+      "skill_calls": [
+        {
+          "step": 1,
+          "skill_respond": "Checking...",
+          "skill_doc": "技能的详细使用说明和例子",
+          "skill_call": { "name": "...", "arguments": { ... } },
+          "skill_output": { "status": "success", "result": { ... } },
+          "skill_end": [ ...4-step post-skill CoT... ]
+        }
+      ],
+      "respond": "Final answer..."
+    }
+  notes:
+    - 首先生成 user_query：用户主动发起的查询，基于话题和可用技能自然生成
+    - success_case: 单技能调用，单步完成，技能返回成功
+    - thought 使用英文
+    - respond 使用 TTS 格式 {V:说话风格描述,A:动作}
+rules:
+  - 每句话必须以 {V:说话风格描述,A:动作} 开头
+  - respond 使用 persona 指定的语言
+  - thought 必须完全使用英文
+  - 单样本生成：success_case
+  - success_case 技能返回成功结果

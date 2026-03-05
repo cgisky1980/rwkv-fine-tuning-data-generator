@@ -1,0 +1,164 @@
+id: complex_skill
+name: 复杂技能调用生成器
+description: 生成复杂多技能调用数据，支持L3级别，≥3个技能，侧重任务规划和编排
+template: templates/main.j2
+export_template: templates/export.j2
+rwkv_template: templates/rwkv.j2
+persona:
+  enabled: true
+  fields:
+  - name
+  - gender
+  - language
+  - race
+  - personality
+  - identity
+  - tone
+  - user_title
+  - optional_tics
+  - allowed_emotions
+  - allowed_actions
+  lang_style: true
+  race_style: true
+user_profile:
+  enabled: true
+  random_known_fields: true
+  fields:
+  - name
+  - age
+  - gender
+  - location
+  - occupation
+  - hobbies
+system:
+  birthday: true
+  time_context: true
+tts:
+  enabled: true
+  format: "{V:说话风格描述,A:动作} 说话内容"
+  per_sentence: true
+topic:
+  enabled: true
+  source: data/chat_topics.json
+  levels:
+  - L2
+  - L3
+parameters:
+  refs_min: 0
+  refs_max: 3
+  refs_probability: 0.4
+  skills_per_record_min: 3
+  skills_per_record_max: 5
+  level: L3
+tools:
+  source: data/skills_config.json
+output_format:
+  schema: |
+    {
+      "user_query": "用户主动发起的查询内容，基于话题和可用技能自然生成",
+      "time": "当前时间，如 2026/02/24 14:37",
+      "multi_step_case": {
+        "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "..." } ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Checking...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 2,
+            "skill_respond": "Processing...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 3,
+            "skill_respond": "Finalizing...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          }
+        ],
+        "respond": "Final answer..."
+      },
+      "orchestration_case": {
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Planning...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 2,
+            "skill_respond": "Executing...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 3,
+            "skill_respond": "Completing...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          }
+        ],
+        "respond": "..."
+      },
+      "parallel_case": {
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Gathering info...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 2,
+            "skill_respond": "More info...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          },
+          {
+            "step": 3,
+            "skill_respond": "Combining...",
+            "skill_doc": "技能的详细使用说明和例子",
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ...4-step post-skill CoT... ]
+          }
+        ],
+        "respond": "..."
+      }
+    }
+  notes:
+    - 首先生成 user_query：用户主动发起的查询，基于话题和可用技能自然生成
+    - 然后基于同一个 user_query 生成三个场景：multi_step_case（多步骤顺序执行）、orchestration_case（任务编排）、parallel_case（信息收集与整合）
+    - 3-5个技能调用
+    - thought 使用英文
+    - respond 使用 TTS 格式 {V:说话风格描述,A:动作}
+rules:
+  - 每句话必须以 {V:说话风格描述,A:动作} 开头
+  - respond 使用 persona 指定的语言
+  - thought 必须完全使用英文
+  - 三样本生成：multi_step_case、orchestration_case、parallel_case
+  - multi_step_case 多个技能依次调用，每步依赖前一步结果
+  - orchestration_case 复杂任务规划和编排
+  - parallel_case 收集多份信息后整合处理

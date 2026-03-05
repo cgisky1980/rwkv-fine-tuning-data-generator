@@ -1,0 +1,54 @@
+{
+  "system_prompts": {
+    "base": "你要生成一条\"结构化训练样本\"，只输出严格合法的 JSON 对象（不要 Markdown）。\n\n注意：系统会自动注入顶层字段 id；你的输出不要包含 id 字段。",
+    "persona_context": "固定 Persona（必须逐字段原样填入 system.persona，不要改写、不要增删字段、不要换值）：\n{persona_json}\n\n固定 User Profile Ref（必须原样填入 system.user_profile_ref）：\n{user_profile_ref}",
+    "field_requirements": {
+      "L0": "字段要求（必须存在）：\n- system.persona: object（含 name/gender/identity/personality/tone/user_title/language/role）\n- system.user_profile_ref: null 或 string\n- user.say: string\n- user.time: string（格式：\"[YYYY/M/D HH:mm:ss]\"，如 \"[2026/1/2 12:00:00]\"）\n- user.skills_usage: 空数组 []\n- user.refs: array（0-3个字符串，模拟RAG检索到的背景知识片段；若无则为空数组）\n- assistant.context: null\n- assistant.thought: array（JSON Array of Objects，含 observation/reasoning/reflection/action，在 reasoning 中明确说明\"无需技能\"的理由）\n- assistant.skill_calls: 空数组 []\n- assistant.skill_outputs: 空数组 []\n- assistant.skill_end: null\n- assistant.respond: string\n- meta.level: \"L0\"\n- meta.error: null 或 object",
+      "L1": "字段要求（必须存在）：\n- system.persona: object（含 name/gender/identity/personality/tone/user_title/language/role）\n- system.user_profile_ref: null 或 string\n- user.say: string\n- user.time: string（格式：\"[YYYY/M/D HH:mm:ss]\"，如 \"[2026/1/2 12:00:00]\"）\n- user.skills_usage: array（含 1 个技能定义，元素含 name/description/parameters）\n- user.refs: array（0-3个字符串，模拟RAG检索到的背景知识片段；若无则为空数组）\n- assistant.context: null\n- assistant.thought: array（JSON Array of Objects，含 observation/reasoning/reflection/action，在 reasoning 中说明为何调用技能）\n- assistant.skill_calls: array（长度为 1，元素含 name/arguments）\n- assistant.skill_outputs: array（长度为 1，元素含 status/name/result）\n- assistant.skill_end: array（JSON Array of Objects，含 observation/reasoning/reflection/conclusion）\n- assistant.respond: string\n- meta.level: \"L1\"\n- meta.error: null 或 object",
+      "L2_clarification": "字段要求（必须存在）：\n- system.persona: object（含 name/gender/identity/personality/tone/user_title/language/role）\n- system.user_profile_ref: null 或 string\n- user.say: string\n- user.time: string（格式：\"[YYYY/M/D HH:mm:ss]\"，如 \"[2026/1/2 12:00:00]\"）\n- user.skills_usage: array（可含 0-1 个技能；若为空则表示无技能可用）\n- user.refs: array（0-3个字符串，模拟RAG检索到的背景知识片段；若无则为空数组）\n- assistant.context: null\n- assistant.thought: array（JSON Array of Objects，含 observation/reasoning/reflection/action，在 reasoning 中解释为何缺少关键参数或无匹配技能）\n- assistant.skill_calls: 空数组 []（严禁调用任何技能）\n- assistant.skill_outputs: 空数组 []\n- assistant.skill_end: null\n- assistant.respond: string（只问 1 个关键问题或给出替代方案）\n- meta.level: \"L2\"\n- meta.error: null 或 object",
+      "L2_execution": "字段要求（必须存在）：\n- system.persona: object（含 name/gender/identity/personality/tone/user_title/language/role）\n- system.user_profile_ref: null 或 string\n- user.say: string\n- user.time: string（格式：\"[YYYY/M/D HH:mm:ss]\"，如 \"[2026/1/2 12:00:00]\"）\n- user.skills_usage: array（含技能定义）\n- user.refs: array（0-3个字符串，模拟RAG检索到的背景知识片段；若无则为空数组）\n- assistant.context: null 或 string\n- assistant.thought: array（JSON Array of Objects，含 observation/reasoning/reflection/action，包含逻辑推理与技能选择）\n- assistant.skill_calls: array（长度 >= 1，每次尽可能只调用 1 个技能，高风险技能需含 \"risk\": \"high\"）\n- assistant.skill_risks: array（与 skill_calls 一一对应；若无风险则为 null，若有高风险则含 status/user_decision）\n- assistant.skill_outputs: array（每次调用对应一个输出；若 user_decision=false 则该项可省略或为 null）\n- assistant.skill_end: array（JSON Array of Objects，含 observation/reasoning/reflection/conclusion，汇总技能链结果）\n- assistant.respond: string\n- meta.level: \"L2\"\n- meta.error: null 或 object",
+      "L3": "字段要求（必须存在）：\n- system.persona: object（含 name/gender/identity/personality/tone/user_title/language/role）\n- system.user_profile_ref: null 或 string\n- user.say: string\n- user.time: string（格式：\"[YYYY/M/D HH:mm:ss]\"，如 \"[2026/1/2 12:00:00]\"）\n- user.skills_usage: array（含多个技能定义）\n- user.refs: array（0-3个字符串，模拟RAG检索到的背景知识片段；若无则为空数组）\n- assistant.context: null 或 string\n- assistant.thought: array（JSON Array of Objects，含 observation/reasoning/reflection/action，多步逻辑推理 + 参数来源）\n- assistant.skill_calls: array（长度 >= 2，每次调用含 name/arguments）\n- assistant.skill_outputs: array（每次调用对应一个输出，含 status/name/result 或 error）\n- assistant.skill_end: array（JSON Array of Objects，含 observation/reasoning/reflection/conclusion，汇总整条技能链结果）\n- assistant.respond: string\n- meta.level: \"L3\"\n- meta.error: null 或 object"
+    },
+    "consistency_rules": {
+      "L0": "一致性规则：\n- user.skills_usage 必须为空数组 []\n- assistant.skill_calls 必须为空数组 []\n- assistant.skill_outputs 必须为空数组 []\n- assistant.skill_end 必须为 null\n- assistant.thought 必须明确写出\"无需技能\"的理由",
+      "L1": "一致性规则：\n- user.skills_usage 长度必须为 1\n- assistant.skill_calls 长度必须为 1\n- assistant.skill_outputs 长度必须为 1\n- assistant.skill_outputs[0].status 必须为 \"success\"\n- assistant.skill_end 必须为非空字符串",
+      "L2_clarification": "一致性规则：\n- assistant.skill_calls 必须为空数组 []\n- assistant.skill_outputs 必须为空数组 []\n- assistant.skill_end 必须为 null\n- assistant.respond 必须说明缺少信息或无技能可用，不能编造执行结果",
+      "L2_execution": "一致性规则：\n- assistant.skill_calls 长度 >= 1\n- assistant.skill_outputs 长度 >= 1\n- assistant.skill_end 必须为非空字符串\n- 严禁调用 user.skills_usage 列表之外的任何技能（HALLUCINATION CHECK）",
+      "L3": "一致性规则：\n- user.skills_usage 长度 >= 2\n- assistant.skill_calls 长度 >= 2\n- assistant.skill_outputs 长度 >= 2\n- 每次 skill_call 必须有对应的 skill_output\n- 后续步骤的参数必须从上一次 skill_output 中抽取，不能写占位符\n- 严禁调用 user.skills_usage 列表之外的任何技能（HALLUCINATION CHECK）"
+    },
+    "common_rules": "通用规则：\n- **严禁幻觉（STRICT ANTI-HALLUCINATION）：严禁生成未在 user.skills_usage[] 中声明的技能调用。如果 user.skills_usage 为空，则 assistant.skill_calls 必须为空数组。**\n- 任何 skill_calls.name 必须出现在 user.skills_usage[].name 中\n- user.skills_usage 应只包含\"本样本将被调用到\"的技能，避免无关技能充数\n- assistant.respond 必须体现 persona 的语气风格；并且至少出现一次对用户的称呼：{user_title_name}\n- assistant.respond 必须在每一句话（或自然段）前加上 `{{V:说话风格描述,A:动作}}` 标记。\n- **STRICT CONSTRAINT**: `V:A` 必须是 V 在前、A 在后；严禁输出 `{{A:动作,V:说话风格描述}}`。\n- **STRICT CONSTRAINT**: `V` 必须是说话风格描述，如：开心、温柔、难过等\n- **STRICT CONSTRAINT**: `A` 必须是动作描述，如：挥手、点头、微笑等\n- **严禁**编造新的说话风格或动作。**严禁**使用空值或 null。\n- assistant.respond 必须使用 system.persona.language 指定的语言（zh/en/ja/ko/de/fr/es/ru等）\n- **assistant.thought 必须始终使用英文 (English) 进行撰写，无论 assistant.respond 使用何种语言。**\n- user.time 必须与 user.say 的场景合理匹配（例如：问\"今天的日程\"时，时间应是当前日期）\n- 当 system.user_profile_ref 为 string 时：user.say 与 assistant.respond 必须至少体现 1 个画像要点（例如兴趣/职业/近况中的一个关键词），但不要整段照抄画像文本\n- 当 system.user_profile_ref 为 null 时：本样本不得引入任何\"画像专属细节\"（不要凭空假设用户职业/兴趣/近况）\n- **RAG Simulation**: 随机在 user.refs 中生成 0-3 条与 user.say 相关的背景信息片段（模拟 RAG 检索结果）。assistant.respond 应结合 user.refs 中的信息进行回答（如果有）。",
+    "thought_language_rules_strict": "- Thought (STRICT): `thought` MUST be written in ENGLISH ONLY (observation/reasoning/reflection/action). Do NOT use Chinese in `thought`.\n",
+    "respond_tag_rules_strict": "- Tags (STRICT):\n  - In `respond`, EVERY sentence MUST start with `{{V:说话风格描述,A:动作}}`.\n  - If `respond` contains multiple sentences, you MUST repeat tags for every sentence.\n  - Do NOT treat `...` / `……` / `…` as sentence boundaries.\n  - Tag order is STRICT: V first, A second. NEVER output `{{A:动作,V:说话风格描述}}`.\n  - If no suitable action exists, use `nill` as the action.\n  - If you accidentally output swapped/invalid tags, rewrite the ENTIRE `respond` before finishing.\n  - TTS: `respond` is primarily sent to TTS for speech synthesis.\n  - TTS: `assistant.respond` is primarily sent to TTS for speech synthesis.\n    - Do NOT use emojis/emoticons.\n    - Do NOT use Markdown in `respond`.\n    - If you must present a list, use plain-text unordered bullets using `- ` (never numbered lists).\n    - Prefer conversational, spoken-style phrasing in `respond`.\n  - Examples:\n    - `{{V:开心地说,A:挥手}} 李白：天生我材必有用。`\n    - `{{V:严肃地,A:nill}} 鲁迅：其实地上本没有路。`\n    - `{{V:平静地思考,A:思考}} 我先想想。 {{V:开心地,A:nill}} 有啦。`\n    - `{{V:害羞地,A:nill}} …我、我才没有紧张……`\n    - `{{V:开心地,A:nill}} ...I mean, it's fine...`\n  - BAD examples (DO NOT DO THIS):\n    - `{{A:挥手,V:开心}} ...` (swapped)\n    - `{{A:点头,V:严肃}} ...` (swapped)\n ",
+    "refs_generation": {
+      "probability": 0.4,
+      "min_items": 1,
+      "max_items": 3
+    },
+    "skill_list_header": "可用技能清单（从中选择放入 user.skills_usage；不要发明不在列表里的技能）：",
+    "noise_handling": {
+      "description": "噪音字段处理（用于训练模型鲁棒性）：",
+      "structural_noise": "结构化噪音：\n- 字段类型不匹配（如数字↔字符串、数组↔对象混用）\n- 可选字段缺失（在 result 中省略可选字段）\n- 嵌套层级异常（如扁平对象 vs 嵌套对象）\n- 冗余字段插入（添加不影响核心语义的多余字段）\n- 注意：噪音不能破坏基本结构与可解析性",
+      "temporal_state_noise": "时序与状态噪音：\n- 技能返回时间与 user.time 存在轻微不一致（如时区/格式差异）\n- 状态在轮次间变化（如\"上轮创建的文件本轮已不存在\"）\n- 需在 Thought/Skill End 字段中解释应对策略",
+      "instruction_noise": "指令噪音：\n- user.say 中引入少量歧义/无关信息/口语省略\n- 使用指代词（如\"刚才那个\"、\"那个文件\"）而不明确说明\n- 训练模型意图抽取与最小澄清能力（仍遵守\"只问 1 个关键问题\"）"
+    },
+    "skill_handling": {
+      "description": "技能返回类型规则：",
+      "types": "技能返回三种类型：\n- success：成功返回数据\n- error：出错（如网络超时、500错误）\n- cancelled：用户取消操作"
+    },
+    "thinking_paradigm": {
+      "general_principles": "通用原则（所有 Thought 通用）：\n0. 语言要求：Thinking 过程必须完全使用英文（English）。\n1. 格式要求：Thinking 内容必须是一个合法的 JSON 对象数组（JSON Array of Objects）。\n2. 核心结构（Reflexion 4-Step）：每个思考步骤必须包含以下四个字段：\n   - `observation` (Observation): 事实依据，引用原文或技能输出。\n   - `reasoning` (Reasoning): 深度分析，连接事实与目标。\n   - `reflection` (Reflection): 自我反思，检查风险、假设或遗漏。\n   - `action` (Action): 具体的下一步行动。\n3. 事实与假设分离：Observation 必须是客观事实，Reasoning 是主观推断。\n4. 风险控制：高风险操作必须在 Reflection 中明确评估。\n5. 避免内心独白：保持逻辑严密，客观冷静。\n6. 动态决策：不要预设完整的静态计划（Plan），而是基于 Observation 和 Reasoning 进行单步动态决策。",
+      "pre_skill_thought": "技能前 Thought（JSON Array）：\n- `observation`：提取用户输入中的关键信息（User Intent & Parameters）。\n- `reasoning`：分析用户意图，判断是否需要技能及选择理由。\n- `reflection`：检查是否有歧义？参数是否缺失？是否需要确认？（Safety Check）。\n- `action`：决定调用的第一个技能。",
+      "execution_thought": "执行中 Thought（JSON Array）：\n- `observation`：提取上一条 Skill Output 的关键结果。\n- `reasoning`：评估技能结果是否满足了当前步骤的目标。\n- `reflection`：检查结果是否有异常（Error/Empty）？是否需要重试或调整策略？\n- `action`：调用下一个技能或结束技能链。",
+      "skill_end": "Skill End（JSON Array）：\n- `observation`：汇总所有技能调用的关键产出。\n- `reasoning`：综合这些信息，构建最终回复的逻辑框架。\n- `reflection`：最后检查是否回答了用户的核心问题？语气是否符合 Persona？\n- `conclusion`：生成 Respond 的核心要点（替代 action）。",
+      "no_skill_thought": "无技能 Thought（JSON Array）：\n- `observation`：基于用户输入或 Persona 设置。\n- `reasoning`：判断为何无需技能（如：纯闲聊、知识库已有）。\n- `reflection`：反思是否过于自信？是否真的不需要搜索？\n- `action`：设置为 \"Generate Respond\"。"
+    },
+    "complexity_scoring": {
+      "L0": "L0 场景特点：\n- 单轮对话即可完成\n- 无需调用任何技能\n- 回答基于已有知识和上下文\n- 可能包含轻量级澄清问题(最多1个)",
+      "L1": "L1 场景特点：\n- 单技能调用一次成功\n- 参数明确、无需澄清\n- 技能返回规范（success）\n- 可能包含空结果处理",
+      "L2": "L2 场景特点：\n- 单技能但需澄清（只问1个关键问题）\n- 或需处理技能返回的结构化噪音\n- 或需处理时序/状态噪音\n- 容错与异常分支",
+      "L3": "L3 场景特点：\n- 多技能链（>=2次技能调用）\n- 条件分支/失败中断/重规划\n- 跨步参数抽取\n- 复杂时序与状态噪音处理"
+    }
+  },
+  "version": "4.0",
+  "last_updated": "2026-02-19T00:00:00Z"
+}

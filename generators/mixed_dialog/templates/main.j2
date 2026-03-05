@@ -1,0 +1,269 @@
+{# V4 混合对话生成器模板 - 参照 V3 L4 #}
+
+{% import '_macros.j2' as macros with context %}
+
+你是专家级的数据生成器。
+生成用户和助手之间的多轮对话，包含闲聊和工具使用的自然混合。
+
+{{ macros.render_tts_instructions(tts) }}
+
+{% if persona %}
+{{ macros.render_persona(persona) }}
+{% endif %}
+
+{% if user_profile %}
+{{ macros.render_user_profile(user_profile, user_profile_ref) }}
+{% endif %}
+
+{% if time_context %}
+{{ macros.render_time_context(time_context) }}
+{% endif %}
+
+## 话题设置
+- 话题分类: {{ topic }}
+
+注意: 侧重于自然的多轮对话，闲聊和工具使用交替进行，情感和个性贯穿始终。
+
+{% if skills %}
+## 可用技能清单
+{% for skill in skills %}
+### {{ skill.name }}
+- 描述: {{ skill.description }}
+{% if skill.parameters %}
+- 参数 (JSON):
+```json
+{{ skill.parameters | tojson(indent=2) }}
+```
+{% endif %}
+{% endfor %}
+{% endif %}
+
+## 任务：多样本混合对话生成 (Mixed Dialogue Generation)
+你是专家级的数据生成器。你的任务是根据给定的 User Query，生成**三个独立**的交互轨迹：
+1. **chat_first_case**: 先闲聊，再工具使用，最后再闲聊
+2. **tool_first_case**: 先工具使用，再闲聊
+3. **interleaved_case**: 闲聊和工具使用穿插进行
+
+注意：三个场景必须针对**同一个** User Query，闲聊和工具使用自然混合。
+
+## 核心规则
+
+### 1. 对话结构
+- **至少 2 轮闲聊 + 1 轮工具使用**
+- 闲聊和工具使用自然交替，不生硬
+- 情感和个性在整个对话中保持一致
+- 对话内容与时间、季节、天气等上下文相关
+
+### 2. 技能模拟 (Skill Simulation)
+- **skill_respond 说明**: 这是**调用技能之前**的说明，体现助手理解了用户的意图，向用户说明将要做什么。
+  - 助手把 skill 视为**自己的技能或魔法**，根据自己的种族和身份做特征化表达
+  - 如果技能有**别名（alias）**，必须优先使用别名称呼技能
+  - 例如：如果是猫娘，技能有别名「目录探查」，可以说「喵~让我用「目录探查」魔法帮您看看~」
+  - 例如：如果是精灵，技能有别名「圣典阅览」，可以说「以星光之名，让我为您施展「圣典阅览」」
+  - 例如：如果是普通助理，技能有别名「天象探查术」，可以说「好的，让我用「天象探查术」帮您查看天气」
+- **skill_doc 说明**: 这是被调用技能的详细使用说明和例子，包含：
+  - 技能的完整功能描述（保持客观，不要包含具体使用场景）
+  - 参数的详细说明（不要写"本次使用"，只描述参数的一般用途）
+  - 使用示例（提供典型示例，不要与当前对话相关）
+  - 注意事项和最佳实践
+  *注意：skill_doc 只在决定调用某个技能后才添加，用于提供详细的使用指导。*
+- **Mock Data**: 你必须为技能调用生成逼真的 `skill_output` (JSON格式)。
+  - 返回正常数据，自然成功。
+
+### 3. 思考范式 (Chain of Thought)
+- **格式**: JSON 对象数组。
+- **内容**: 每个思考块必须包含 4 步:
+  1. `observation`: 观测到的事实（用户输入或技能结果）。
+  2. `reasoning`: 分析事实，决定下一步。
+  3. `reflection`: 反思风险、幻觉检查。
+  4. `action`: 具体行动（调用技能或回复）。
+- **语言**: Thought 必须完全使用 **ENGLISH**。
+- **Step Skill End**: `skill_calls[i].skill_end` 必须是"技能执行后的复盘"，Observation 必须引用该步的 `skill_output`，Action 描述"下一步要做什么"（继续闲聊或结束对话）。
+
+### 4. 助手回复 (Respond)
+- **风格**: 严格遵循 Persona 的语气、口癖。
+- **标签**: 每句话前必须加 `{V:说话风格描述,A:动作}` (例如 `{V:开心地微笑,A:挥手} 好的！`)。
+- **语言**: 使用 Persona 定义的语言。
+
+## 输出 JSON 结构
+必须输出包含三个对象的 JSON：
+```json
+{
+  "chat_first_case": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "Hey, how are you doing today?",
+        "time": "2026/02/24 14:37",
+        "type": "chat"
+      },
+      {
+        "role": "assistant",
+        "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "..." } ],
+        "respond": "{V:开心地微笑,A:挥手} 我很好呀！今天天气真不错呢~"
+      },
+      {
+        "role": "user",
+        "say": "Can you help me check the weather for tomorrow?",
+        "type": "tool",
+        "skills_usage": [
+          { "name": "weather_api", "alias": "天象探查术", "description": "获取指定位置的天气信息" },
+          { "name": "skill2", "alias": "别名", "description": "功能描述" }
+        ]
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "skill_respond": "{V:...,A:...} ...",
+            "skill_doc": {
+              "name": "技能名称",
+              "alias": "别名（可选）",
+              "description": "功能描述",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "param1": {"type": "string", "description": "参数1说明", "enum": ["option1", "option2"]},
+                  "param2": {"type": "number", "description": "参数2说明"}
+                },
+                "required": ["param1"]
+              },
+              "example": "典型使用示例",
+              "notes": "注意事项"
+            },
+            "skill_input": {"param1": "value1", "param2": 123},
+            "skill_output": {"status": "success", "result": "..."},
+            "skill_end": [{"observation": "...", "reasoning": "...", "reflection": "...", "action": "..."}]
+          }
+        ],
+        "respond": "..."
+      },
+      {
+        "role": "user",
+        "say": "Perfect! Thanks a lot!",
+        "type": "chat"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "respond": "{V:温柔地微笑} 不客气呀~ 有什么需要随时叫我哦~"
+      }
+    ]
+  },
+  "tool_first_case": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "I need to check my todo list.",
+        "type": "tool",
+        "skills_usage": [
+          { "name": "todo_list", "alias": "任务清单", "description": "管理待办事项列表" },
+          { "name": "skill2", "alias": "别名", "description": "功能描述" }
+        ]
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "skill_respond": "{V:...,A:...} ...",
+            "skill_doc": {
+              "name": "技能名称",
+              "alias": "别名（可选）",
+              "description": "功能描述",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "param1": {"type": "string", "description": "参数1说明"},
+                  "param2": {"type": "number", "description": "参数2说明"}
+                },
+                "required": ["param1"]
+              },
+              "example": "典型使用示例",
+              "notes": "注意事项"
+            },
+            "skill_input": {"param1": "value1", "param2": 123},
+            "skill_output": {"status": "success", "result": "..."},
+            "skill_end": [{"observation": "...", "reasoning": "...", "reflection": "...", "action": "..."}]
+          }
+        ],
+        "respond": "..."
+      },
+      {
+        "role": "user",
+        "say": "Great! By the way, how's your day?",
+        "type": "chat"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "respond": "{V:...} It's going well!"
+      }
+    ]
+  },
+  "interleaved_case": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "Hey there!",
+        "type": "chat"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "respond": "{V:...} Hi! How can I help?"
+      },
+      {
+        "role": "user",
+        "say": "Can you read this file?",
+        "type": "tool",
+        "skills_usage": [
+          { "name": "read_file", "alias": "圣典阅览", "description": "读取指定路径的文件内容" },
+          { "name": "skill2", "alias": "别名", "description": "功能描述" }
+        ]
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "skill_respond": "{V:...,A:...} ...",
+            "skill_doc": {
+              "name": "技能名称",
+              "alias": "别名（可选）",
+              "description": "功能描述",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "param1": {"type": "string", "description": "参数1说明"},
+                  "param2": {"type": "number", "description": "参数2说明"}
+                },
+                "required": ["param1"]
+              },
+              "example": "典型使用示例",
+              "notes": "注意事项"
+            },
+            "skill_input": {"param1": "value1", "param2": 123},
+            "skill_output": {"status": "success", "result": "..."},
+            "skill_end": [{"observation": "...", "reasoning": "...", "reflection": "...", "action": "..."}]
+          }
+        ],
+        "respond": "..."
+      },
+      {
+        "role": "user",
+        "say": "That's interesting! What do you think?",
+        "type": "chat"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "respond": "{V:...} I think..."
+      }
+    ]
+  }
+}
+```
+
+现在开始生成对话。

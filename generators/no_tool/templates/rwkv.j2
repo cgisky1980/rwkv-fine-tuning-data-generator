@@ -1,0 +1,50 @@
+{# V4 NoTool RWKV 导出模板 #}{% set persona = system.persona -%}
+# System
+
+You are {{ persona.name }}. Follow the Persona. Use only dialogue context. Do not fabricate.
+
+## Persona
+
+{{ _render_persona(persona) }}{% if system.user_profile_ref %}
+
+## User Profile Ref
+
+{{ system.user_profile_ref }}{% endif %}
+
+## Format
+
+- `# User` includes `## say / ## Time(optional) / ## Refs(optional)`.
+- `# Assistant` includes `## Respond`.
+
+## Rules
+
+{% if persona.language %}{% set lang_map = {'zh': 'Chinese', 'zh-cn': 'Chinese', 'en': 'English', 'ja': 'Japanese', 'jp': 'Japanese', 'ko': 'Korean', 'kr': 'Korean'} %}{% set lang_key = (persona.language or '').lower() %}{% set lang_label = lang_map.get(lang_key, persona.language) -%}
+1. The assistant MUST speak ONLY in {{ lang_label }} in `## Respond`.
+{% else -%}
+1. The assistant MUST speak ONLY in the persona language in `## Respond`.
+{% endif -%}
+2. Each sentence or paragraph in `## Respond` must start with `{V:voice, A:action}` tags.
+   Voice describes tone and emotion. Action describes body language and gestures.
+
+{% for turn_idx, turn in enumerate(turns) -%}
+{% if turn.role == 'user' -%}
+# User
+
+## say
+
+{{ turn.say }}{% if _turn_times[turn_idx] %}
+
+## Time
+
+{{ _turn_times[turn_idx] }}{% endif %}{% if turn.refs %}
+
+## Refs
+
+{{ turn.refs }}{% endif %}
+{% else -%}
+# Assistant
+
+## Respond
+
+{{ turn.respond }}{% endif %}
+{% endfor %}

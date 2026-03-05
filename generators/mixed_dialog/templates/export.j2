@@ -1,0 +1,81 @@
+{# V4 混合对话导出模板 - MD 格式 #}
+{% set persona = system.persona %}
+{% set user_profile = system.user_profile %}
+{% set time_context = system.time_context %}
+# System
+## Persona
+- 名字: {{ persona.name }}
+- 性别: {{ persona.gender }}
+- 语言: {{ persona.language or 'zh' }}
+{% if persona.race %}- 种族: {{ persona.race }}
+{% endif %}{% if persona.personality %}- 性格: {{ persona.personality }}
+{% endif %}{% if persona.identity and persona.identity.name %}- 身份: {{ persona.identity.name }}
+{% endif %}{% if persona.tone %}- 语气: {{ persona.tone }}
+{% endif %}{% if persona.user_title %}- 用户称呼: {{ persona.user_title }}
+{% endif %}{% if persona.optional_tics %}{% set tics = persona.optional_tics if persona.optional_tics is string else (persona.optional_tics.get(persona.language, persona.optional_tics.get('zh', [])) if persona.optional_tics is mapping else persona.optional_tics) %}{% if tics and tics|length > 0 %}- 口癖: {{ tics | join(' / ') }}
+{% endif %}{% endif %}
+
+---
+
+# Chat First Case
+{% for case_name, case_data in [('chat_first_case', chat_first_case), ('tool_first_case', tool_first_case), ('interleaved_case', interleaved_case)] %}
+{% if case_name == 'chat_first_case' %}
+{% set case_title = '先闲聊再工具' %}
+{% elif case_name == 'tool_first_case' %}
+{% set case_title = '先工具再闲聊' %}
+{% elif case_name == 'interleaved_case' %}
+{% set case_title = '穿插进行' %}
+{% endif %}
+## {{ case_title }} ({{ case_name }})
+{% for turn_idx, turn in enumerate(case_data.dialogue) %}{% if turn.role == 'user' %}
+### User
+#### say ({{ turn.type or 'chat' }})
+{{ turn.say }}
+{% if turn.refs %}
+#### Refs
+{{ turn.refs }}
+{% endif %}{% else %}
+### Assistant
+{% if turn.thought %}
+#### Thought
+{% for t in turn.thought %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% if turn.tool_calls %}
+#### Tool Calls
+{% for tc in turn.tool_calls %}
+##### Step {{ tc.step }}
+- Tool Respond: {{ tc.tool_respond }}
+- Tool Call: {{ tc.tool_call.name }}
+{% if tc.tool_call.arguments %}
+{% for k, v in tc.tool_call.arguments.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if tc.tool_output %}
+- Tool Output Status: {{ tc.tool_output.status }}
+{% if tc.tool_output.result %}
+{% for k, v in tc.tool_output.result.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if tc.tool_output.error %}
+- Error: {{ tc.tool_output.error }}
+{% endif %}
+{% endif %}
+{% if tc.tool_end %}
+#### Tool End
+{% for t in tc.tool_end %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+#### Respond
+{{ turn.respond }}
+{% endif %}{% endfor %}
+{% if not loop.last %}
+---
+{% endif %}
+{% endfor %}

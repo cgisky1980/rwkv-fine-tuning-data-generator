@@ -1,0 +1,176 @@
+id: mixed_dialog
+name: 混合对话生成器
+description: 生成闲聊和工具使用混合的对话数据，参照V3 L4设计
+template: templates/main.j2
+export_template: templates/export.j2
+rwkv_template: templates/rwkv.j2
+persona:
+  enabled: true
+  fields:
+  - name
+  - gender
+  - language
+  - race
+  - personality
+  - identity
+  - tone
+  - user_title
+  - optional_tics
+  - allowed_emotions
+  - allowed_actions
+  lang_style: true
+  race_style: true
+user_profile:
+  enabled: true
+  random_known_fields: true
+  fields:
+  - name
+  - age
+  - gender
+  - location
+  - occupation
+  - hobbies
+system:
+  birthday: true
+  time_context: true
+tts:
+  enabled: true
+  format: "{V:说话风格描述,A:动作} 说话内容"
+  per_sentence: true
+topic:
+  enabled: true
+  source: data/chat_topics.json
+  levels:
+  - L1
+  - L2
+  - L3
+parameters:
+  refs_min: 0
+  refs_max: 3
+  chat_turns: 2
+  tool_turns: 1
+  skills_per_record: 1
+tools:
+  source: data/skills_config.json
+output_format:
+  schema: |
+    {
+      "chat_first_case": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "Hey, how are you doing today?",
+            "time": "2026/02/24 14:37",
+            "type": "chat"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} I'm good, thanks for asking!"
+          },
+          {
+            "role": "user",
+            "say": "Can you help me check the weather?",
+            "time": "2026/02/24 14:37",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "skill_calls": [ ... ],
+            "respond": "..."
+          },
+          {
+            "role": "user",
+            "say": "Perfect! Thanks a lot!",
+            "time": "2026/02/24 14:37",
+            "type": "chat"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} You're welcome!"
+          }
+        ]
+      },
+      "tool_first_case": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "I need to check my todo list.",
+            "time": "2026/02/24 14:37",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "skill_calls": [ ... ],
+            "respond": "..."
+          },
+          {
+            "role": "user",
+            "say": "Great! By the way, how's your day?",
+            "time": "2026/02/24 14:37",
+            "type": "chat"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} It's going well!"
+          }
+        ]
+      },
+      "interleaved_case": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "Hey there!",
+            "time": "2026/02/24 14:37",
+            "type": "chat"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} Hi! How can I help?"
+          },
+          {
+            "role": "user",
+            "say": "Can you read this file?",
+            "time": "2026/02/24 14:37",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "skill_calls": [ ... ],
+            "respond": "..."
+          },
+          {
+            "role": "user",
+            "say": "That's interesting! What do you think?",
+            "time": "2026/02/24 14:37",
+            "type": "chat"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} I think..."
+          }
+        ]
+      }
+    }
+  notes:
+    - 三样本生成：chat_first_case（先闲聊再工具）、tool_first_case（先工具再闲聊）、interleaved_case（穿插进行）
+    - 多轮混合对话，包含闲聊轮和工具使用轮
+    - 闲聊：情感自然，与时间、个性契合
+    - 工具：精准调用，流程完整
+    - thought 使用英文
+    - respond 使用 TTS 格式 {V:说话风格描述,A:动作}
+rules:
+  - 每句话必须以 {V:说话风格描述,A:动作} 开头
+  - respond 使用 persona 指定的语言
+  - thought 必须完全使用英文
+  - 对话包含闲聊轮和工具轮的自然过渡
+  - 闲聊和工具使用交替进行
+  - 情感和个性在对话中保持一致
+  - 三样本生成：chat_first_case、tool_first_case、interleaved_case

@@ -1,0 +1,713 @@
+{
+  "version": "1.0",
+  "description": "工具配置列表，包含工具定义、参数规范和风险等级",
+  "skills": [
+    {
+      "name": "theme_set_season",
+      "alias": "四时结界",
+      "description": "设置主题季节模式，切换到对应季节的视觉效果",
+      "help": "四时结界可以让你切换界面的季节主题。支持的季节有春）- 春天主题：spring（，万物复苏；summer（夏）- 夏日主题，阳光灿烂；autumn（秋）- 秋天主题，金黄落叶；winter（冬）- 冬天主题白雪皑皑。使用方法：只需告诉助手你想设置什么季节，比如'帮我换成夏天主题'或'我要看春天的界面'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "season": {
+            "type": "string",
+            "description": "季节名称",
+            "enum": [
+              "spring",
+              "summer",
+              "autumn",
+              "winter",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "season"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "theme_set_weather",
+      "alias": "天象召唤",
+      "description": "设置主题天气效果，显示对应的天气动画",
+      "help": "天象召唤可以为你展示各种天气效果。支持的天气有：sunny（晴天）- 阳光明媚；rainy（雨天）- 细雨绵绵；snowy（雪天）- 雪花飘落。使用方法：告诉助手你想看到什么天气，比如'给我来点雨'或'我想看雪花'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "weather": {
+            "type": "string",
+            "description": "天气类型",
+            "enum": [
+              "sunny",
+              "rainy",
+              "snowy",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "weather"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "background_audio_control",
+      "alias": "乐章执掌",
+      "description": "控制背景音频的播放、暂停、音量等",
+      "help": "乐章执掌是你的背景音乐控制中心。可以：播放(play)、暂停(pause)、停止(stop)音乐；调节音量大小(volume_up/volume_down/set_volume)。使用方法：'播放音乐'、'暂停一下'、'声音调小一点'、'设置音量为50'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "音频控制动作",
+            "enum": [
+              "play",
+              "pause",
+              "stop",
+              "volume_up",
+              "volume_down",
+              "set_volume",
+              "help"
+            ]
+          },
+          "volume": {
+            "type": "number",
+            "description": "音量值（0-100），仅在 set_volume 动作时需要",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "audio_id": {
+            "type": "string",
+            "description": "音频ID，指定要控制的音频源"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "theme_set_effects",
+      "alias": "幻境编织",
+      "description": "设置主题视觉效果，如动画、过渡效果等",
+      "help": "幻境编织可以添加各种视觉效果。效果类型包括：fade（淡入淡出）、slide（滑动）、zoom（缩放）、none（无效果）、blur（模糊）、glow（发光）。使用方法：告诉助手你想添加什么效果，比如'加个模糊效果'或'用滑动过渡'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "effect_type": {
+            "type": "string",
+            "description": "效果类型",
+            "enum": [
+              "fade",
+              "slide",
+              "zoom",
+              "none",
+              "blur",
+              "glow",
+              "help"
+            ]
+          },
+          "duration": {
+            "type": "number",
+            "description": "效果持续时间（毫秒）",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "effect_type"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "assistant_voice_control",
+      "alias": "真言术",
+      "description": "控制助手语音的播放、暂停、音量和音色",
+      "help": "真言术控制助手的声音。可以：speak（让助手说话）- 说出指定文本；stop（停止）、pause（暂停）、resume（恢复）语音播放；set_volume（调节音量）、set_voice（更换音色）。使用方法：'助手来说这段话'、'停一下'、'换个声音'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "语音控制动作",
+            "enum": [
+              "speak",
+              "stop",
+              "pause",
+              "resume",
+              "set_volume",
+              "set_voice",
+              "help"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "要语音播报的文本内容，仅在 speak 动作时需要"
+          },
+          "volume": {
+            "type": "number",
+            "description": "音量值（0-100），仅在 set_volume 动作时需要",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "voice_id": {
+            "type": "string",
+            "description": "音色ID，仅在 set_voice 动作时需要"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "weather_api",
+      "alias": "天象探查术",
+      "description": "获取指定位置的天气信息",
+      "help": "天象探查术可以查询任何城市的天气。只需要告诉助手你想查询哪个城市的天气，比如'北京今天天气怎么样'、'上海明天会下雨吗'。可以设置温度单位：摄氏度(celsius)或华氏度(fahrenheit)。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "查询的城市或地区名称"
+          },
+          "unit": {
+            "type": "string",
+            "description": "温度单位",
+            "enum": [
+              "celsius",
+              "fahrenheit",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "location"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "theme_list_presets",
+      "alias": "主题名录",
+      "description": "列出所有可用的预设主题",
+      "help": "主题名录显示所有可用的界面主题预设。你可以从中选择喜欢的风格。只需告诉助手'有哪些主题'或'给我看看主题列表'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "按类别筛选主题，可选",
+            "enum": [
+              "nature",
+              "city",
+              "abstract",
+              "help"
+            ]
+          }
+        },
+        "required": []
+      },
+      "risk": "low"
+    },
+    {
+      "name": "delete_file",
+      "alias": "湮灭术",
+      "description": "删除指定路径的文件",
+      "help": "湮灭术可以删除文件。警告：此操作不可恢复！请确保你要删除的文件是正确的。使用方法：告诉助手'删除 XXX 文件'。可选参数 recursive 可以删除整个文件夹。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "要删除的文件路径"
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "是否递归删除目录，默认为 false"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "risk": "high"
+    },
+    {
+      "name": "write_file",
+      "alias": "创世文书",
+      "description": "创建或覆盖指定路径的文件内容",
+      "help": "创世文书可以创建新文件或修改已有文件内容。使用方法：告诉助手'在 XXX 路径创建文件，内容是 XXX'。注意：如果文件已存在，会覆盖原内容。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "文件路径"
+          },
+          "content": {
+            "type": "string",
+            "description": "要写入的文件内容"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      },
+      "risk": "high"
+    },
+    {
+      "name": "read_file",
+      "alias": "圣典阅览",
+      "description": "读取指定路径的文件内容",
+      "help": "圣典阅览可以读取文件内容。使用方法：告诉助手'读取 XXX 文件'。可选参数 encoding 指定编码格式，默认 UTF-8。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "要读取的文件路径"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "文件编码",
+            "enum": [
+              "utf-8",
+              "gbk",
+              "latin1",
+              "ascii",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "list_directory",
+      "alias": "目录探查",
+      "description": "列出指定目录下的所有文件和子目录",
+      "help": "目录探查可以查看文件夹里有什么内容。使用方法：告诉助手'列出 XXX 目录'或'看看 XXX 文件夹里有什么'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "要列出内容的目录路径"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "search_files",
+      "alias": "寻踪术",
+      "description": "在指定目录下搜索匹配模式的文件",
+      "help": "寻踪术可以帮你找到文件。可以按文件名模式搜索，比如'搜索 *.txt 文件'或'找找有没有 readme'。可选择 recursive 参数是否搜索子目录。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "搜索的根目录"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "文件名匹配模式"
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "是否递归搜索子目录，默认为 true"
+          }
+        },
+        "required": [
+          "directory",
+          "pattern"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "send_message",
+      "alias": "传讯术",
+      "description": "发送消息到指定目标（邮件、短信、社交媒体等）",
+      "help": "传讯术可以帮你发送消息。支持渠道：email（邮件）、sms（短信）、twitter、discord、qq、wechat。使用方法：告诉助手'给 XXX 发消息，内容是 XXX，通过 XXX 渠道'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "消息接收方的地址或ID"
+          },
+          "content": {
+            "type": "string",
+            "description": "消息内容"
+          },
+          "channel": {
+            "type": "string",
+            "description": "发送渠道",
+            "enum": [
+              "email",
+              "sms",
+              "twitter",
+              "discord",
+              "qq",
+              "wechat",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "recipient",
+          "content",
+          "channel"
+        ]
+      },
+      "risk": "high"
+    },
+    {
+      "name": "execute_command",
+      "alias": "敕令术",
+      "description": "在系统终端执行命令",
+      "help": "敕令术可以在系统中执行命令。这是个强大的功能，可以运行各种终端命令。使用方法：告诉助手'执行 XXX 命令'。可选 timeout 参数设置超时时间（秒）。注意：某些命令可能有风险，请小心使用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "要执行的系统命令"
+          },
+          "timeout": {
+            "type": "number",
+            "description": "命令执行超时时间（秒），默认为 30",
+            "minimum": 1,
+            "maximum": 300
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "risk": "high"
+    },
+    {
+      "name": "open_folder",
+      "alias": "开门术",
+      "description": "打开指定目录的文件夹窗口",
+      "help": "开门术可以打开文件夹窗口。使用方法：告诉助手'打开 XXX 目录'。可选参数 select_file 可以在打开文件夹时自动选中指定文件。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "要打开的文件夹路径"
+          },
+          "select_file": {
+            "type": "string",
+            "description": "可选，指定要选中的文件名，打开文件夹时自动选中该文件"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "open_application",
+      "alias": "启灵术",
+      "description": "启动指定的应用程序，可选择直接打开网址",
+      "help": "启灵术可以启动应用程序。支持的应用有：notepad（记事本）、calculator（计算器）、explorer（文件资源管理器）、chrome/edge/firefox（浏览器）、vscode（编辑器）、word/excel/powerpoint（办公软件）、terminal（终端）、powershell。可以指定应用程序名称或完整路径。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "应用程序名称或可执行文件名",
+            "enum": [
+              "notepad",
+              "calculator",
+              "explorer",
+              "chrome",
+              "edge",
+              "firefox",
+              "vscode",
+              "word",
+              "excel",
+              "powerpoint",
+              "terminal",
+              "powershell",
+              "help"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "应用程序的完整路径（当名称不在预设列表中时使用）"
+          },
+          "arguments": {
+            "type": "string",
+            "description": "启动参数，可选"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "create_todo",
+      "alias": "命书契约",
+      "description": "创建一个新的待办事项",
+      "help": "命书契约可以创建待办事项。可以设置：title（标题）- 必填；description（详细描述）；due_date（截止日期，格式YYYY-MM-DD）；priority（优先级：low/medium/high）；tags（标签）。使用方法：'创建一个待办，标题是 XXX'或'帮我记一下要买牛奶'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "待办事项标题"
+          },
+          "description": {
+            "type": "string",
+            "description": "待办事项详细描述，可选"
+          },
+          "due_date": {
+            "type": "string",
+            "description": "截止日期，格式为 YYYY-MM-DD，可选"
+          },
+          "priority": {
+            "type": "string",
+            "description": "优先级",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "help"
+            ],
+            "default": "medium"
+          },
+          "tags": {
+            "type": "array",
+            "description": "标签列表，用于分类待办事项，可选",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "update_todo",
+      "alias": "改命术",
+      "description": "更新待办事项的状态或内容",
+      "help": "改命术可以修改待办事项。可以修改：title（标题）、description（描述）、due_date（截止日期）、priority（优先级）、status（状态：pending/in_progress/completed/cancelled）、tags（标签）。使用方法：'把那个待办改成已完成'或'帮我把截止日期改到明天'。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "todo_id": {
+            "type": "string",
+            "description": "待办事项的唯一标识ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "新的标题，可选"
+          },
+          "description": {
+            "type": "string",
+            "description": "新的描述，可选"
+          },
+          "due_date": {
+            "type": "string",
+            "description": "新的截止日期，格式为 YYYY-MM-DD，可选"
+          },
+          "priority": {
+            "type": "string",
+            "description": "新的优先级，可选",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "help"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "状态更新",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled",
+              "help"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "description": "新的标签列表，可选",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "todo_id"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "delete_todo",
+      "alias": "消名术",
+      "description": "删除指定的待办事项",
+      "help": "消名术可以删除待办事项。使用方法：'删除 XXX 待办事项'。注意：删除后无法恢复，请确认后再操作。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "todo_id": {
+            "type": "string",
+            "description": "要删除的待办事项ID"
+          }
+        },
+        "required": [
+          "todo_id"
+        ]
+      },
+      "risk": "low"
+    },
+    {
+      "name": "list_todos",
+      "alias": "命书总览",
+      "description": "列出所有待办事项，支持按状态过滤",
+      "help": "命书总览可以查看所有待办事项。可以按状态过滤：pending（待处理）、in_progress（进行中）、completed（已完成）、cancelled（已取消）。可以按 due_date（截止日期）、priority（优先级）、created_at（创建时间）排序。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "按状态过滤，可选值：pending, in_progress, completed, cancelled",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled",
+              "help"
+            ]
+          },
+          "sort_by": {
+            "type": "string",
+            "description": "排序方式",
+            "enum": [
+              "due_date",
+              "priority",
+              "created_at",
+              "help"
+            ],
+            "default": "created_at"
+          },
+          "sort_order": {
+            "type": "string",
+            "description": "排序顺序",
+            "enum": [
+              "asc",
+              "desc",
+              "help"
+            ],
+            "default": "asc"
+          },
+          "limit": {
+            "type": "number",
+            "description": "返回结果数量限制，默认为全部"
+          }
+        },
+        "required": []
+      },
+      "risk": "low"
+    },
+    {
+      "name": "search_todos",
+      "alias": "追命术",
+      "description": "搜索待办事项，支持按关键词或标签搜索",
+      "help": "追命术可以搜索待办事项。按 keyword（关键词）搜索标题或描述；按 tags（标签）过滤；按 status（状态）或 priority（优先级）过滤。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词，匹配标题或描述"
+          },
+          "tags": {
+            "type": "array",
+            "description": "按标签过滤",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "按状态过滤",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled",
+              "help"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "description": "按优先级过滤",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "help"
+            ]
+          }
+        },
+        "required": []
+      },
+      "risk": "low"
+    },
+    {
+      "name": "puppet",
+      "alias": "傀儡术",
+      "description": "调用傀儡AI Agent处理复杂需求",
+      "help": "傀儡术可以调用一个AI助手来处理复杂任务。当你需要完成多步骤、复杂的需求时，可以告诉傀儡术。比如'帮我整理桌面的文件'、'帮我写一个Python脚本'。context 参数可以提供额外背景信息。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "需要傀儡Agent完成的任务描述"
+          },
+          "context": {
+            "type": "string",
+            "description": "任务相关的上下文信息，可选"
+          }
+        },
+        "required": [
+          "task"
+        ]
+      },
+      "risk": "medium"
+    }
+  ]
+}
