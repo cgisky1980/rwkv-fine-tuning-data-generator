@@ -1,118 +1,153 @@
-# 数据生成 Skill (DataGenSkill) 参考文档
+# 数据生成 Skill 系统 参考文档
 
 ## 概述
 
-`DataGenSkill` 是 V4 数据生成系统的统一接口服务，提供：
-- 需求澄清+技能调用场景的数据生成
-- 基于指纹的去重机制，避免生成重复数据
-- RWKV 训练数据导出
-- 可被其他 Agent 调用的清晰接口
+`data_gen_skill/` 是 V4 项目内的**独立子系统**，提供基于 MCP 协议的分布式数据生成能力：
 
-## 文件结构
+- **MCP 工具入口**：Agent（如 SOLO）通过 MCP 协议调用 `create_gen_task`、`pull_work_items`、`submit_work_result` 等工具
+- **调度器分发**：`Dispatcher` 将任务拆分为原子 `work_items`，多 Agent 并发拉取（SQLite 行锁保证不冲突）
+- **Agent 自备 LLM**：系统不调用外部 AI API，只做调度、校验、存储
+- **合规校验**：`SchemaValidator` 验证 Agent 提交的数据是否符合生成器规范
+- **去重机制**：基于 `item_id + data` 的 SHA256 指纹，避免重复入库
+- **独立数据库**：`data/gen_data.db` 不与 V4 的 `tasks.db` 混用
+
+## 系统流程
 
 ```
-generators/clarify_skill/
-├── generator.yaml              # 生成器配置
-└── templates/
-    ├── _macros.j2              # 共享宏（TTS、Persona、用户画像、时间上下文）
-    ├── main.j2                 # 主提示词模板
-    ├── export.j2               # MD格式导出模板
-    └── rwkv.j2                 # RWKV训练格式导出模板
-
-pipeline/data_gen_skill.py      # DataGenSkill 服务类
-pipeline/export_template.py     # 已更新：支持 clarify_skill 类型识别和导出
+SOLO Agent ──MCP工具──▶ MCP Server ──create_task()──▶ Dispatcher
+                                                        │ 拆分 slots
+                                                        ▼
+                                                work_items (DB队列)
+                                                  ↙         ↘
+                                           Agent A        Agent B
+                                           (LLM生成)      (LLM生成)
+                                              ↘            ↙
+                                          Schema Validator
+                                                │
+                                          gen_data.db
 ```
 
-## 核心接口
+## 目录结构
 
-### DataGenSkill 类
+```
+data_gen_skill/
+├── __init__.py           # 包入口
+├── models.py             # 数据模型 (GenTask, WorkItem, ...)
+├── config.py             # 配置管理
+├── config.yaml           # 默认配置
+├── db.py                 # SQLite 数据库 (gen_data.db)
+├── dispatcher.py         # 任务调度器
+├── schema_validator.py   # 合规校验器
+├── worker.py             # Agent 参考实现 (MockAgentWorker)
+├── mcp_server.py         # MCP 工具端点
+└── data/                 # 运行时自动创建 gen_data.db
+```
+
+## 核心类
+
+### GenTaskDispatcher
 
 ```python
-from pipeline.data_gen_skill import DataGenSkill, GenRequest
+from data_gen_skill.dispatcher import GenTaskDispatcher
+from data_gen_skill.models import CreateTaskRequest
 
-skill = DataGenSkill()
+d = GenTaskDispatcher()
 
-# 生成数据
-request = GenRequest(
-    generator_type="clarify_skill",
-    count=10,
-    language="zh",
-    temperature=0.7,
-    skip_duplicate=True,  # 自动跳过重复
-)
-result = skill.generate(request)
-# result.task_id, result.is_duplicate, result.records_generated
+# 创建任务
+req = CreateTaskRequest(generator_type="clarify_skill", count=100)
+task = d.create_task(req)
 
-# 同步等待生成完成
-result = skill.generate_sync(request, timeout=300)
+# Agent 拉取工作
+items = d.pull_work_items("my_agent", batch_size=5)
 
-# 导出 RWKV 格式
-export_result = skill.export_rwkv(task_ids=["task_xxx"], output_path="output.jsonl")
+# Agent 提交结果
+result = d.submit_result("my_agent", item["item_id"], generated_data)
 
-# 查询已生成记录
-records = skill.list_generated({"generator_type": "clarify_skill"})
-
-# 获取统计
-stats = skill.get_stats()
-
-# 检查重复
-dup = skill.check_duplicate(request)
+# 查询/导出
+d.get_task(task_id)
+d.list_tasks(status_filter="running")
+d.export_rwkv(task_id)
+d.get_stats()
 ```
 
-### GenRequest 字段
+### GenAgentWorker
 
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| generator_type | str | "clarify_skill" | 生成器类型 |
-| count | int | 10 | 生成数量 |
-| temperature | float | 0.7 | 温度 |
-| seed | int? | None | 随机种子 |
-| concurrency | int | 4 | 并发数 |
-| language | str | "zh" | 语言 |
-| topic | str? | None | 话题 |
-| user_profile_ratio | float | 0.3 | 用户画像比例 |
-| provider_id | str? | None | LLM Provider |
-| max_tokens | int | 8192 | 最大token |
-| skip_duplicate | bool | True | 是否跳过重复 |
+```python
+from data_gen_skill.worker import GenAgentWorker
 
-## 去重机制
+class MyAgent(GenAgentWorker):
+    def generate_for_item(self, item: dict) -> dict:
+        # 用自己的 LLM 生成符合 schema 的数据
+        # ...
+        return data
 
-- 基于 `generator_type + language + topic + count + temperature` 生成 SHA256 指纹（前16位）
-- 指纹存储在 `data/tasks.db` 的 `gen_fingerprints` 表
-- `skip_duplicate=True` 时自动跳过已完成的相同配置任务
+worker = MyAgent("my_agent_id", dispatcher)
+worker.run_loop(batch_size=3)
+```
 
-## clarify_skill 生成器
+### MCP Server
 
-### 场景说明
+启动：
+```bash
+cd V4
+python -m data_gen_skill.mcp_server
+python -m data_gen_skill.mcp_server --config data_gen_skill/config.yaml
+```
 
-三种场景同时生成：
-1. **clarify_then_success**: 用户请求模糊 → 助手澄清 → 用户补充 → 技能调用成功
-2. **clarify_then_error**: 用户请求模糊 → 助手澄清 → 用户补充 → 技能调用失败
-3. **no_clarify_needed**: 用户请求清晰 → 助手直接调用技能（对照样本）
+MCP 配置（mcp.json）：
+```json
+{
+  "mcpServers": {
+    "data-gen-skill": {
+      "command": "python",
+      "args": ["-m", "data_gen_skill.mcp_server"],
+      "cwd": "${workspaceFolder}/V4"
+    }
+  }
+}
+```
 
-### 输出格式
+### MCP 工具列表
 
-多轮对话格式，包含 `dialogue` 数组，每轮有 `role`、`say`/`respond`、`thought`、`skill_calls` 等字段。
-
-### 关键规则
-
-- 澄清轮 thought 的 action 必须是 "clarify"
-- 澄清提问一次只问1-2个关键问题
-- thought 使用英文，respond 使用 persona 语言
-- 每句话必须以 `{V:说话风格描述,A:动作}` 开头
+| 工具名 | 参数 | 说明 |
+|--------|------|------|
+| `create_gen_task` | generator_type, count, language_ratios, ... | 创建新生成任务 |
+| `list_gen_tasks` | status_filter, limit | 列出所有任务 |
+| `get_gen_task` | task_id | 查看任务详情和进度 |
+| `cancel_gen_task` | task_id | 取消任务 |
+| `pull_work_items` | agent_id, batch_size | Agent 拉取工作项 |
+| `submit_work_result` | agent_id, work_item_id, data | Agent 提交结果 |
+| `get_system_stats` | — | 系统统计 |
+| `export_rwkv` | task_id, output_path | 导出 RWKV 格式 |
 
 ## 数据库表
 
-### gen_fingerprints
+### gen_tasks
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INTEGER | 主键 |
-| fingerprint | TEXT | 去重指纹（UNIQUE） |
-| task_id | TEXT | 关联任务ID |
+| task_id | TEXT | 主键 |
+| name | TEXT | 任务名称 |
 | generator_type | TEXT | 生成器类型 |
-| language | TEXT | 语言 |
+| status | TEXT | pending/running/completed/failed/cancelled |
+| request_json | TEXT | 请求参数 JSON |
+| total_items | INTEGER | 总工作项数 |
+| completed_items | INTEGER | 已完成数 |
+| failed_items | INTEGER | 失败数 |
+
+### work_items
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| item_id | TEXT | 主键 |
+| task_id | TEXT | 关联任务 |
+| language | TEXT | 生成语言 |
+| persona | TEXT | 人设类型 |
 | topic | TEXT | 话题 |
-| skills_hash | TEXT | 技能组合hash |
-| record_count | INTEGER | 记录数 |
-| created_at | TEXT | 创建时间 |
+| skill | TEXT | 使用技能 |
+| status | TEXT | pending/assigned/submitted/validated/failed |
+| agent_id | TEXT | 分配的 Agent |
+
+### submitted_records
+
+存储 Agent 提交的生成结果，`fingerprint` 字段有 UNIQUE 约束实现去重。

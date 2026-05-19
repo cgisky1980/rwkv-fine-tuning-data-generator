@@ -1,0 +1,7 @@
+# 数据生成 Skill 配置
+db_path: data/gen_data.db
+work_item_timeout_seconds: 600
+max_retries: 3
+batch_size: 5
+generators_dir: ../generators
+v4_data_dir: ../data
