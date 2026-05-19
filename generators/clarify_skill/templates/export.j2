@@ -1,0 +1,58 @@
+{# V4 需求澄清技能调用导出模板 - MD 格式 #}
+{% set persona = system.persona %}
+{% set user_profile = system.user_profile %}
+{% set time_context = system.time_context %}
+# System
+## Persona
+- 名字: {{ persona.name }}
+- 性别: {{ persona.gender }}
+- 语言: {{ persona.language or 'zh' }}
+{% if persona.race %}- 种族: {{ persona.race }}
+{% endif %}{% if persona.personality %}- 性格: {{ persona.personality }}
+{% endif %}{% if persona.identity and persona.identity.name %}- 身份: {{ persona.identity.name }}
+{% endif %}{% if persona.tone %}- 语气: {{ persona.tone }}
+{% endif %}{% if persona.user_title %}- 用户称呼: {{ persona.user_title }}
+{% endif %}{% if persona.optional_tics %}{% set tics = persona.optional_tics if persona.optional_tics is string else (persona.optional_tics.get(persona.language, persona.optional_tics.get('zh', [])) if persona.optional_tics is mapping else persona.optional_tics) %}{% if tics and tics|length > 0 %}- 口癖: {{ tics | join(' / ') }}
+{% endif %}{% endif %}
+{% for turn_idx, turn in enumerate(turns) %}{% if turn.role == 'user' %}# User
+## say
+{{ turn.say }}
+{% if turn.type %}## type
+{{ turn.type }}
+{% endif %}{% if turn.refs %}## Refs
+{{ turn.refs }}
+{% endif %}{% else %}# Assistant
+{% if turn.thought %}## Thought
+{% for t in turn.thought %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% if turn.skill_calls %}## Tool Calls
+{% for tc in turn.skill_calls %}
+### Step {{ tc.step }}
+- Tool Respond: {{ tc.skill_respond }}
+- Tool Call: {{ tc.skill_call.name }}
+{% if tc.skill_call.arguments %}
+{% for k, v in tc.skill_call.arguments.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+- Tool Risk: {{ tc.tool_risk }}
+{% if tc.skill_output %}
+- Tool Output Status: {{ tc.skill_output.status }}
+{% if tc.skill_output.result %}
+{% for k, v in tc.skill_output.result.items() %}
+  - {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if tc.skill_end %}## Tool End
+{% for t in tc.skill_end %}
+- {{ t.observation }} → {{ t.reasoning }} → {{ t.reflection }} → {{ t.action }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+## Respond
+{{ turn.respond }}
+{% endif %}{% endfor %}

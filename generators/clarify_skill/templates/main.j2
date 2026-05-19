@@ -1,0 +1,223 @@
+{# V4 需求澄清技能调用生成器模板 #}
+
+{% import '_macros.j2' as macros with context %}
+
+你是专家级的数据生成器。
+生成用户和助手之间的对话，包含需求澄清和技能调用的完整流程。
+
+{{ macros.render_tts_instructions(tts) }}
+
+{% if persona %}
+{{ macros.render_persona(persona) }}
+{% endif %}
+
+{% if user_profile %}
+{{ macros.render_user_profile(user_profile, user_profile_ref) }}
+{% endif %}
+
+{% if time_context %}
+{{ macros.render_time_context(time_context) }}
+{% endif %}
+
+## 话题设置
+- 话题分类: {{ topic }}
+
+### 语言要求
+- **助手语言**：{{ persona.language or 'zh' }}（助手必须用此语言回复）
+- **用户语言**：{{ user_language }}（用户使用此语言）
+
+注意: 侧重于需求澄清场景，重点考察助手识别信息不足并主动澄清的能力。
+
+{% if skills %}
+## 可用技能清单
+{% for skill in skills %}
+### {{ skill.name }}
+{% if skill.alias %}- 别名: {{ skill.alias }}
+{% endif %}- 描述: {{ skill.description }}
+{% if skill.help %}- 帮助: {{ skill.help }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+## 任务：多样本生成 (Multi-Trajectory Generation)
+你是专家级的数据生成器。你的任务是根据给定的场景，生成**三个独立**的交互轨迹：
+
+1. **clarify_then_success**: 用户请求模糊/不完整 → 助手识别信息不足并澄清 → 用户补充 → 助手调用技能成功
+2. **clarify_then_error**: 用户请求模糊/不完整 → 助手识别信息不足并澄清 → 用户补充 → 助手调用技能但失败
+3. **no_clarify_needed**: 用户请求清晰完整 → 助手直接调用技能成功（对照样本）
+
+**重要**：clarify_then_success 和 clarify_then_error 的用户初始请求必须相同。
+
+## 核心规则
+
+### 1. 澄清阶段规则 (Clarification Rules)
+- **何时需要澄清**：用户请求缺少关键参数（如未指定城市查天气、未指定文件路径读取文件等）
+- **澄清方式**：
+  - 一次只问1-2个关键问题，不要一次问太多
+  - 语气自然温和，不要像审问
+  - 可以先回应再提问，如"好的，我来帮您查天气~请问您想查哪个城市呢？"
+  - 如果技能有别名，澄清时可以自然地提及技能名称
+- **澄清轮 thought**：action 字段必须为 "clarify"，说明为什么需要澄清
+- **用户补充**：用户的补充信息要自然，像真实对话一样
+
+### 2. 技能模拟 (Skill Simulation)
+- **skill_respond 说明**: 这是**调用技能之前**的说明，体现助手理解了用户的意图，向用户说明将要做什么。
+  - 助手把 skill 视为**自己的技能或魔法**，根据自己的种族和身份做特征化表达
+  - 如果技能有**别名（alias）**，必须优先使用别名称呼技能
+  - 例如：如果是猫娘，技能有别名「目录探查」，可以说「喵~让我用「目录探查」魔法帮您看看~」
+  - 例如：如果是精灵，技能有别名「圣典阅览」，可以说「以星光之名，让我为您施展「圣典阅览」」
+  - 例如：如果是普通助理，技能有别名「天象探查术」，可以说「好的，让我用「天象探查术」帮您查看天气」
+- **skill_doc 说明**: 这是被调用技能的详细使用说明，格式为 JSON 对象：
+  ```json
+  {
+    "name": "技能名称",
+    "alias": "别名（可选）",
+    "description": "功能描述",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "param1": {"type": "string", "description": "参数1说明", "enum": ["option1", "option2"]},
+        "param2": {"type": "number", "description": "参数2说明"}
+      },
+      "required": ["param1"]
+    },
+    "example": "使用示例",
+    "notes": "注意事项"
+  }
+  ```
+  - *注意：skill_doc 只在决定调用某个技能后才添加*
+- **Mock Data**: 你必须为每个技能调用生成逼真的 `skill_output` (JSON格式)。
+  - `success`: 返回正常数据。
+  - `error`: 返回错误结构 (e.g. `{"status": "error", ...}`).
+  - `cancelled`: 返回取消结构 (e.g. `{"status": "cancelled", ...}`).
+
+### 3. 思考范式 (Chain of Thought)
+- **格式**: JSON 对象数组。
+- **关键规则**：thought 数组只需要 **1个** 4步 COT，**不要包含技能执行后的思考**！
+- **内容**: 
+  - `observation`: 观测到的事实（用户输入）。
+  - `reasoning`: 分析用户需求，判断信息是否充分。
+  - `reflection`: 如果信息不足，确认需要澄清哪些参数；如果充分，确认技能参数。
+  - `action`: 决定是 "clarify"（需要澄清）还是 "call_skill"（直接调用技能）。
+- **语言**: Thought 必须完全使用 **ENGLISH**。
+- **skill_end**：技能执行后的思考放在 skill_calls[i].skill_end 里，格式同样是 4步 COT
+
+### 4. 助手回复 (Respond)
+- **风格**: 严格遵循 Persona 的语气、口癖。
+- **标签**: 每句话前必须加 `{V:说话风格描述,A:动作}` (例如 `{V:开心地微笑,A:挥手} 好的！`)。
+- **语言**: 使用 Persona 定义的语言。
+- **用标点控制节奏**：
+  - 逗号（，）→ 0.3秒呼吸停顿
+  - 句号（。）→ 0.6秒停顿，语调回落
+  - 感叹号（！）→ 提升音高，增强情绪
+  - 括号（（））→ 括号内放慢语速
+
+### 5. 用户 Query
+- **模糊请求**：用户请求缺少关键参数，如"帮我查天气"（未指定城市）、"读一下文件"（未指定路径）
+- **清晰请求**：用户请求包含所有必要参数，如"帮我查北京的天气"、"读取 /home/user/doc.txt 文件"
+- **注意**：用户Query中**不要使用** title_for_user（如"妈妈"、"主人"等）称呼自己，用户直接说话即可
+
+## 输出 JSON 结构
+```json
+{
+  "clarify_then_success": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "模糊/不完整的用户请求",
+        "time": "2026/02/24 14:37",
+        "type": "clarify_needed"
+      },
+      {
+        "role": "assistant",
+        "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "clarify" } ],
+        "respond": "{V:...} 澄清提问..."
+      },
+      {
+        "role": "user",
+        "say": "用户补充信息",
+        "time": "2026/02/24 14:38",
+        "type": "tool"
+      },
+      {
+        "role": "assistant",
+        "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "call_skill" } ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Checking...",
+            "skill_doc": { "name": "...", "alias": "...", "description": "...", "parameters": {...}, "example": "...", "notes": "..." },
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "..." } ]
+          }
+        ],
+        "respond": "Final answer..."
+      }
+    ]
+  },
+  "clarify_then_error": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "与 clarify_then_success 相同的模糊请求",
+        "time": "2026/02/24 14:37",
+        "type": "clarify_needed"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "respond": "{V:...} 澄清提问..."
+      },
+      {
+        "role": "user",
+        "say": "用户补充信息",
+        "time": "2026/02/24 14:38",
+        "type": "tool"
+      },
+      {
+        "role": "assistant",
+        "thought": [ ... ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Checking...",
+            "skill_doc": { ... },
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "error", "error": { "code": "...", "message": "..." } },
+            "skill_end": [ ... ]
+          }
+        ],
+        "respond": "Error handling response..."
+      }
+    ]
+  },
+  "no_clarify_needed": {
+    "dialogue": [
+      {
+        "role": "user",
+        "say": "清晰完整的用户请求",
+        "time": "2026/02/24 14:37",
+        "type": "tool"
+      },
+      {
+        "role": "assistant",
+        "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "call_skill" } ],
+        "skill_calls": [
+          {
+            "step": 1,
+            "skill_respond": "Checking...",
+            "skill_doc": { ... },
+            "skill_call": { "name": "...", "arguments": { ... } },
+            "skill_output": { "status": "success", "result": { ... } },
+            "skill_end": [ ... ]
+          }
+        ],
+        "respond": "Final answer..."
+      }
+    ]
+  }
+}
+```
+
+现在开始生成对话。

@@ -1,0 +1,174 @@
+id: clarify_skill
+name: 需求澄清技能调用生成器
+description: 生成需求澄清+技能调用的对话数据，用户请求模糊或不完整时助手先澄清再调用技能
+template: templates/main.j2
+export_template: templates/export.j2
+rwkv_template: templates/rwkv.j2
+persona:
+  enabled: true
+  fields:
+  - name
+  - gender
+  - language
+  - race
+  - personality
+  - identity
+  - tone
+  - user_title
+  - optional_tics
+  - allowed_emotions
+  - allowed_actions
+  lang_style: true
+  race_style: true
+user_profile:
+  enabled: true
+  random_known_fields: true
+  fields:
+  - name
+  - age
+  - gender
+  - location
+  - occupation
+  - hobbies
+system:
+  birthday: true
+  time_context: true
+tts:
+  enabled: true
+  format: "{V:说话风格描述,A:动作} 说话内容"
+  per_sentence: true
+topic:
+  enabled: true
+  source: data/chat_topics.json
+  levels:
+  - L1
+  - L2
+parameters:
+  refs_min: 0
+  refs_max: 3
+  refs_probability: 0.4
+  skills_per_record: 1
+  level: L2
+  clarify_turns_min: 1
+  clarify_turns_max: 2
+tools:
+  source: data/skills_config.json
+output_format:
+  schema: |
+    {
+      "clarify_then_success": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "模糊/不完整的用户请求",
+            "time": "2026/02/24 14:37",
+            "type": "clarify_needed"
+          },
+          {
+            "role": "assistant",
+            "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "clarify" } ],
+            "respond": "{V:...} 澄清提问..."
+          },
+          {
+            "role": "user",
+            "say": "用户补充信息",
+            "time": "2026/02/24 14:38",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ { "observation": "...", "reasoning": "...", "reflection": "...", "action": "call_skill" } ],
+            "skill_calls": [
+              {
+                "step": 1,
+                "skill_respond": "Checking...",
+                "skill_doc": "技能的详细使用说明和例子",
+                "skill_call": { "name": "...", "arguments": { ... } },
+                "skill_output": { "status": "success", "result": { ... } },
+                "skill_end": [ ...4-step post-skill CoT... ]
+              }
+            ],
+            "respond": "Final answer..."
+          }
+        ]
+      },
+      "clarify_then_error": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "模糊/不完整的用户请求",
+            "time": "2026/02/24 14:37",
+            "type": "clarify_needed"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "respond": "{V:...} 澄清提问..."
+          },
+          {
+            "role": "user",
+            "say": "用户补充信息",
+            "time": "2026/02/24 14:38",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "skill_calls": [
+              {
+                "step": 1,
+                "skill_respond": "Checking...",
+                "skill_doc": "技能的详细使用说明和例子",
+                "skill_call": { "name": "...", "arguments": { ... } },
+                "skill_output": { "status": "error", "error": { ... } },
+                "skill_end": [ ...4-step post-skill CoT... ]
+              }
+            ],
+            "respond": "Error handling response..."
+          }
+        ]
+      },
+      "no_clarify_needed": {
+        "dialogue": [
+          {
+            "role": "user",
+            "say": "清晰完整的用户请求",
+            "time": "2026/02/24 14:37",
+            "type": "tool"
+          },
+          {
+            "role": "assistant",
+            "thought": [ ... ],
+            "skill_calls": [
+              {
+                "step": 1,
+                "skill_respond": "Checking...",
+                "skill_doc": "技能的详细使用说明和例子",
+                "skill_call": { "name": "...", "arguments": { ... } },
+                "skill_output": { "status": "success", "result": { ... } },
+                "skill_end": [ ...4-step post-skill CoT... ]
+              }
+            ],
+            "respond": "Final answer..."
+          }
+        ]
+      }
+    }
+  notes:
+    - 三样本生成：clarify_then_success、clarify_then_error、no_clarify_needed
+    - clarify_then_success：用户请求模糊，助手澄清后成功调用技能
+    - clarify_then_error：用户请求模糊，助手澄清后调用技能但失败
+    - no_clarify_needed：用户请求清晰，助手直接调用技能（对照样本）
+    - 澄清轮中 thought 的 action 必须是 "clarify"
+    - 澄清提问要自然，不要像审问
+    - thought 使用英文
+    - respond 使用 TTS 格式 {V:说话风格描述,A:动作}
+rules:
+  - 每句话必须以 {V:说话风格描述,A:动作} 开头
+  - respond 使用 persona 指定的语言
+  - thought 必须完全使用英文
+  - 澄清轮：助手识别到信息不足时，先提问澄清再调用技能
+  - 澄清提问要自然温和，一次只问1-2个关键问题
+  - 技能调用轮：信息充分后精准调用技能
+  - 三样本生成：clarify_then_success、clarify_then_error、no_clarify_needed
+  - clarify_then_success 和 clarify_then_error 的用户初始请求必须相同

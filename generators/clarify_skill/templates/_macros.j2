@@ -1,0 +1,135 @@
+{# V4 共享宏定义 #}
+{# 所有生成器通用的模板宏 #}
+
+{%- macro render_tts_instructions(tts_config) -%}
+## TTS 指令格式
+
+**每一自然句**必须以 TTS 指令开头，格式如下：
+
+{V:说话风格描述} 说话内容
+{V:说话风格描述,A:动作} 说话内容
+
+- **V** (Voice)：**音色、语气、语调**描述，必填
+- **A** (Action)：动作描述，可选，没有动作则不写
+
+**重要**：如果助手回复包含多个自然句（以句号、感叹号、问号分隔），每句都要有自己的TTS标签。
+
+### V: 说话风格描述指南
+
+**V 必须描述声音相关的属性**，包括：
+
+1. **音色特质**：甜美、沙哑、慵懒、活泼、沉稳、清亮、软糯、低沉、清脆等
+2. **语气语调**：温柔、撒娇、抱怨、疑问、解释、命令、恳求、调侃等
+3. **情绪状态**：开心、难过、生气、惊讶、尴尬、疲惫、俏皮、平静、严肃等
+4. **语速节奏**：快速、缓慢、飞快、慢慢、从容、急促等
+
+**错误示例**：
+- 错误：`{V:像好奇小猫一样歪头}` - 这是动作，应该放在 A:
+- 错误：`{V:眨眨眼}` - 这是动作，应该放在 A:
+- 错误：`{V:凑近看}` - 这是动作，应该放在 A:
+
+**正确示例**：
+- 正确：`{V:甜美俏皮的语气,A:像好奇小猫一样歪头}` - V 描述声音，A 描述动作
+- 正确：`{V:温柔低声细语,A:眨眨眼}` - V 描述声音，A 描述动作
+- 正确：`{V:惊讶得声音微微提高,A:凑近看}` - V 描述声音，A 描述动作
+
+### 描述技巧
+
+1. **用生活化类比描述声音**
+   - 错误："增加基频抖动"
+   - 正确："像喝了一小口冰可乐后说话，声音有点微微发颤，但很活泼"
+
+2. **明确情绪主次，避免矛盾修饰**
+   - 错误："悲伤又欢快"
+   - 正确："表面强装欢快，但语调深处透着疲惫"
+
+3. **结合具体行为提示声音变化**
+   - 正确："请在'阳光'二字后停顿0.3秒"
+   - 正确："说'讨厌'时声音拖长带点撒娇"
+
+4. **情感连贯性**
+   - 错误：第一句开心，第二句突然生气（不自然）
+   - 正确：开心 → 开心但平静 → 平静（自然过渡）
+
+### A: 动作描述（可选）
+
+描述说话时的肢体动作或表情，如：微笑、挥手、点头、歪头、托腮、叹气、挠头、眨眼、凑近等。
+
+### 完整示例
+
+**单句：**
+```
+{V:甜美满足的语气,A:眯眼微笑} 哇！这个也太好吃了吧！
+{V:慵懒低沉的声音} 嗯~今天不想动...
+{V:俏皮轻快的语调,A:歪头} 你在说什么呀？
+```
+
+**多句（每句都有TTS标签）：**
+```
+{V:开心明亮的语调,A:挥手} 嗨！今天天气真好呀！...{V:期待温柔的语气} 你有什么安排吗？
+{V:惊讶得声音提高,A:凑近} 哇，这个好厉害！...{V:兴奋活泼的语调} 居然还能这样？
+{V:温柔安抚的语气} 没关系的。...{V:鼓励坚定的语调,A:轻轻拍拍肩膀} 一切都会好起来的。
+```
+{%- endmacro -%}
+
+{%- macro render_persona(persona, lang_style=true) -%}
+## Persona 信息
+- **名字**: {{ persona.name }}
+- **性别**: {{ persona.gender }}
+- **语言**: {{ persona.language or 'zh' }}
+{% if persona.race %}- **种族**: {{ persona.race }}
+{% endif %}{% if persona.personality %}- **性格**: {{ persona.personality }}
+{% endif %}{% if persona.tone %}- **语气**: {{ persona.tone }}
+{% endif %}{% if persona.user_title %}- **对用户的称呼**: {{ persona.user_title }}
+{% endif %}{% if persona.optional_tics %}{% set tics = persona.optional_tics if persona.optional_tics is string else (persona.optional_tics.get(persona.language, persona.optional_tics.get('zh', [])) if persona.optional_tics is mapping else persona.optional_tics) %}{% if tics and tics|length > 0 %}- **口癖**: {{ tics | join(' / ') }}
+{% endif %}{% endif %}
+{%- endmacro -%}
+
+{%- macro render_user_profile(profile, profile_ref) -%}
+## 用户画像
+{% if profile %}
+{%- if profile.name %}
+- 名字: {{ profile.name }}
+{%- endif %}
+{%- if profile.age %}
+- 年龄: {{ profile.age }}
+{%- endif %}
+{%- if profile.gender %}
+- 性别: {{ profile.gender }}
+{%- endif %}
+{%- if profile.location %}
+- 位置: {{ profile.location }}
+{%- endif %}
+{%- if profile.occupation %}
+- 职业: {{ profile.occupation }}
+{%- endif %}
+{%- if profile.hobbies and profile.hobbies|length > 0 %}
+{%- set display_hobbies = [] %}
+{%- for hobby in profile.hobbies %}
+{%- if hobby and hobby != "" %}
+{%- set _ = display_hobbies.append(hobby) %}
+{%- endif %}
+{%- endfor %}
+{%- if display_hobbies|length > 0 %}
+- 爱好: {{ display_hobbies | join(", ") }}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- endmacro -%}
+
+{%- macro render_time_context(time_context) -%}
+## 时间上下文
+- **时间**: {{ time_context.datetime }}
+- **星期**: {{ time_context.weekday }}
+- **天气**: {{ time_context.weather }}
+
+**时间相关性表达**：对话应与时间自然关联
+- 早晨（6-9点）：问候、早餐话题、今日计划
+- 上午（9-12点）：工作/学习话题、精力充沛
+- 中午（12-14点）：午餐、休息话题
+- 下午（14-18点）：下午茶、工作收尾
+- 傍晚（18-20点）：下班/放学、晚餐话题
+- 晚上（20-23点）：放松、娱乐、总结一天
+- 深夜（23点后）：晚安、安静氛围
+- 周末：休闲、娱乐、出游话题
+{%- endmacro -%}

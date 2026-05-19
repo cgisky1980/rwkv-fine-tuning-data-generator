@@ -1,0 +1,115 @@
+{# V4 ClarifySkill RWKV 导出模板 #}{% set persona = system.persona -%}
+# System
+
+You are {{ persona.name }}. Follow the Persona. Use only Skill Output + dialogue context. Do not fabricate.
+
+## Persona
+
+{{ _render_persona(persona) }}{% if system.user_profile_ref %}
+
+## User Profile Ref
+
+{{ system.user_profile_ref }}{% endif %}
+
+## Format
+
+- `# User` includes `## say / ## Time(optional) / ## Skills Usage(optional) / ## Refs(optional)`.
+- `# Assistant` includes `## Thought(optional) / ## Step(optional) / ## Respond`.
+
+## Rules
+
+{% if persona.language %}{% set lang_map = {'zh': 'Chinese', 'zh-cn': 'Chinese', 'en': 'English', 'ja': 'Japanese', 'jp': 'Japanese', 'ko': 'Korean', 'kr': 'Korean', 'de': 'German', 'fr': 'French'} %}{% set lang_key = (persona.language or '').lower() %}{% set lang_label = lang_map.get(lang_key, persona.language) -%}
+1. The assistant MUST speak ONLY in {{ lang_label }} in `## Respond` and `### Step Respond`.
+{% else -%}
+1. The assistant MUST speak ONLY in the persona language in `## Respond` and `### Step Respond`.
+{% endif -%}
+2. Each sentence or paragraph in `### Step Respond` and `## Respond` must start with `{V:voice, A:action}` tags.
+   Voice describes tone and emotion. Action describes body language and gestures.
+3. When user input is ambiguous or incomplete, the assistant MUST clarify before calling any skill.
+
+{% for turn in dialogue %}
+{% if turn.role == 'user' %}
+# User
+
+## say
+
+{{ turn.say }}{% if turn.time %}
+
+## Time
+
+{{ turn.time }}{% endif %}{% if turn.skills_usage %}
+
+## Available Skills
+
+Select skills to use based on the conversation. You can use one skill or multiple skills. If no suitable skill or task is complex, suggest using the puppet system.
+
+{% for skill in turn.skills_usage -%}
+### Skill {{ loop.index }}
+
+- name: {{ skill.name }}
+{% if skill.alias %}- alias: {{ skill.alias }}{% endif %}
+{% if skill.description %}- description: {{ skill.description }}{% endif %}
+{% endfor %}{% endif %}{% if turn.refs %}
+
+## Refs
+
+{{ turn.refs }}{% endif %}
+
+{% elif turn.role == 'assistant' %}
+# Assistant{% if turn.thought %}
+
+## Thought
+
+{% set first_thought = turn.thought[0] if turn.thought and turn.thought is iterable and turn.thought is not string else {} %}
+- observation: {{ first_thought.observation or '' }}
+- reasoning: {{ first_thought.reasoning or '' }}
+- reflection: {{ first_thought.reflection or '' }}
+- action: {{ first_thought.action or '' }}
+{% endif -%}{% if turn.skill_calls %}{% for sc in turn.skill_calls %}
+
+## Step {{ loop.index }}
+
+### Step Respond
+
+{{ sc.skill_respond or '' }}
+
+{% if sc.skill_doc %}
+<skill>{{ sc.skill_doc.name }}</skill>
+
+### Skill Doc
+
+- name: {{ sc.skill_doc.name }}
+- alias: {{ sc.skill_doc.alias }}
+- description: {{ sc.skill_doc.description }}
+- parameters: {{ sc.skill_doc.parameters }}
+- example: {{ sc.skill_doc.example }}
+- notes: {{ sc.skill_doc.notes }}
+{% endif %}
+
+### Skill Call
+
+```skill_call_json
+{{ sc.skill_input | tojson }}
+```{% if sc.skill_output %}
+
+### Skill Output
+
+```skill_output_json
+{{ sc.skill_output | tojson }}
+```
+{% endif -%}{% if sc.skill_end %}
+
+### Skill End
+
+{% for thought in sc.skill_end -%}
+- observation: {{ thought.observation or '' }}
+- reasoning: {{ thought.reasoning or '' }}
+- reflection: {{ thought.reflection or '' }}
+- action: {{ thought.action or '' }}
+{% endfor %}{% endif -%}{%- endfor -%}{% endif %}
+
+## Respond
+
+{{ turn.respond or '' }}
+{% endif %}
+{% endfor %}

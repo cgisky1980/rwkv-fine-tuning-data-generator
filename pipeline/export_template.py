@@ -89,6 +89,9 @@ def get_generator_type(data: dict) -> str:
         if any(k in turns for k in ["chat_first_case", "tool_first_case", "interleaved_case"]):
             return "mixed_dialog"
     
+    if any(k in data for k in ["clarify_then_success", "clarify_then_error", "no_clarify_needed"]):
+        return "clarify_skill"
+
     if any(k in data for k in ["multi_step_case", "orchestration_case", "parallel_case"]):
         return "complex_skill"
     
@@ -127,7 +130,7 @@ def convert_to_template_format(data: dict, generator_type: str) -> dict:
     """
     converted = data.copy()
     
-    if generator_type in ["single_skill", "single_skill_error", "complex_skill"]:
+    if generator_type in ["single_skill", "single_skill_error", "complex_skill", "clarify_skill"]:
         turns = converted.get("turns", [])
         if turns and len(turns) > 0:
             first_turn = turns[0]
@@ -364,6 +367,89 @@ def export_rwkv_data(input_file: str, output_file: str = None):
                                             rng.shuffle(skill_list)
                                             turn['skills_usage'] = skill_list
                     
+                    case_render_data = {
+                        'system': system_data,
+                        'dialogue': dialogue,
+                    }
+                    rendered = clean_empty_lines(template.render(case_render_data))
+                    rendered = _fix_trailing_newline(rendered)
+                    results.append(json.dumps({"text": rendered}, ensure_ascii=False))
+        elif generator_type == 'clarify_skill':
+            cases_data = data.get('turns', [{}])[0] if data.get('turns') else {}
+            system_data = data.get('system', {})
+            for case_name in ['clarify_then_success', 'clarify_then_error', 'no_clarify_needed']:
+                case_data = cases_data.get(case_name, {})
+                if case_data and case_data.get('dialogue'):
+                    dialogue = case_data.get('dialogue', [])
+                    time_context = system_data.get('time_context', {})
+                    base_datetime = time_context.get('datetime', '')
+
+                    current_time = datetime.now()
+                    if base_datetime:
+                        try:
+                            base_str = base_datetime.replace('/', '-')
+                            current_time = datetime.strptime(base_str, "%Y-%m-%d %H:%M")
+                        except ValueError:
+                            pass
+
+                    is_first = True
+                    for idx, turn in enumerate(dialogue):
+                        if turn.get('role') == 'user':
+                            if 'time' not in turn:
+                                if not is_first:
+                                    delta_seconds = random.randint(40, 120)
+                                    current_time += timedelta(seconds=delta_seconds)
+                                turn['time'] = current_time.strftime("%Y/%m/%d %H:%M")
+                                is_first = False
+
+                            turn_type = turn.get('type', '')
+                            if turn_type == 'tool' or turn_type == 'clarify_needed' or 'skills_usage' not in turn:
+                                if idx + 1 < len(dialogue):
+                                    next_turn = dialogue[idx + 1]
+                                    if next_turn.get('role') == 'assistant' and 'skill_calls' in next_turn:
+                                        skill_list = []
+                                        for sc in next_turn.get('skill_calls', []):
+                                            skill_doc = sc.get('skill_doc', {})
+                                            if isinstance(skill_doc, dict):
+                                                skill_info = {
+                                                    'name': skill_doc.get('name', ''),
+                                                    'alias': skill_doc.get('alias', ''),
+                                                    'description': skill_doc.get('description', '')
+                                                }
+                                            else:
+                                                skill_info = {
+                                                    'name': '',
+                                                    'alias': '',
+                                                    'description': str(skill_doc) if skill_doc else ''
+                                                }
+                                            if skill_info['name'] or skill_info['alias']:
+                                                skill_list.append(skill_info)
+
+                                        if skill_list:
+                                            all_tools = []
+                                            try:
+                                                loader = get_generator_loader()
+                                                tools = loader.get_tools(generator_type)
+                                                for t in tools:
+                                                    all_tools.append({
+                                                        'name': t.name,
+                                                        'alias': t.alias,
+                                                        'description': t.description
+                                                    })
+                                            except:
+                                                pass
+
+                                            used_names = set(s['name'] for s in skill_list)
+                                            available = [t for t in all_tools if t['name'] not in used_names]
+                                            rng = random.Random(idx * 1000 + len(skill_list))
+                                            rng.shuffle(available)
+                                            need = max(0, 4 - len(skill_list))
+                                            random_skills = available[:need]
+
+                                            skill_list.extend(random_skills)
+                                            rng.shuffle(skill_list)
+                                            turn['skills_usage'] = skill_list
+
                     case_render_data = {
                         'system': system_data,
                         'dialogue': dialogue,
