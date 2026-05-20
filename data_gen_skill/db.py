@@ -33,9 +33,15 @@ class GenDatabase:
     def close(self):
         pass
 
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
+
     def _init_tables(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS gen_tasks (
                     task_id TEXT PRIMARY KEY,
@@ -105,22 +111,16 @@ class GenDatabase:
             conn.commit()
 
     def create_task(self, task: GenTask, work_items: List[WorkItem]) -> str:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO gen_tasks (task_id, name, generator_type, status, request_json,
                    total_items, completed_items, failed_items, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    task.task_id,
-                    task.name,
-                    task.generator_type,
-                    task.status.value,
-                    json.dumps(task.request.to_dict()),
-                    task.total_items,
-                    task.completed_items,
-                    task.failed_items,
-                    task.created_at,
-                    task.updated_at,
+                    task.task_id, task.name, task.generator_type,
+                    task.status.value, json.dumps(task.request.to_dict()),
+                    task.total_items, task.completed_items, task.failed_items,
+                    task.created_at, task.updated_at,
                 ),
             )
             for item in work_items:
@@ -128,27 +128,16 @@ class GenDatabase:
                     """INSERT INTO work_items (item_id, task_id, slot_index, language, persona, topic, skill,
                        status, agent_id, assigned_at, submitted_at, error_message, retry_count)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        item.item_id,
-                        item.task_id,
-                        item.slot_index,
-                        item.language,
-                        item.persona,
-                        item.topic,
-                        item.skill,
-                        item.status.value,
-                        item.agent_id,
-                        item.assigned_at,
-                        item.submitted_at,
-                        item.error_message,
-                        item.retry_count,
-                    ),
+                    (item.item_id, item.task_id, item.slot_index, item.language,
+                     item.persona, item.topic, item.skill, item.status.value,
+                     item.agent_id, item.assigned_at, item.submitted_at,
+                     item.error_message, item.retry_count),
                 )
             conn.commit()
         return task.task_id
 
     def get_task(self, task_id: str) -> Optional[GenTask]:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM gen_tasks WHERE task_id = ?", (task_id,)
             ).fetchone()
@@ -164,22 +153,39 @@ class GenDatabase:
             params.append(status_filter)
         query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
-
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_gen_task(r) for r in rows]
 
     def update_task_status(self, task_id: str, status: TaskStatus):
         now = datetime.now().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "UPDATE gen_tasks SET status = ?, updated_at = ? WHERE task_id = ?",
                 (status.value, now, task_id),
             )
             conn.commit()
 
+    def update_task_config(self, task_id: str, request: CreateTaskRequest):
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE gen_tasks SET request_json = ?, generator_type = ?, updated_at = ? WHERE task_id = ?",
+                (json.dumps(request.to_dict()), request.generator_type, now, task_id),
+            )
+            conn.commit()
+
+    def update_task_count(self, task_id: str, total_items: int):
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE gen_tasks SET total_items = ?, updated_at = ? WHERE task_id = ?",
+                (total_items, now, task_id),
+            )
+            conn.commit()
+
     def update_task_counts(self, task_id: str, completed: int, failed: int):
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE gen_tasks SET completed_items = ?, failed_items = ?, updated_at = ?
                    WHERE task_id = ?""",
@@ -187,8 +193,45 @@ class GenDatabase:
             )
             conn.commit()
 
+    def add_work_items(self, task_id: str, items: List[WorkItem]) -> int:
+        with self._connect() as conn:
+            for item in items:
+                conn.execute(
+                    """INSERT INTO work_items (item_id, task_id, slot_index, language, persona, topic, skill,
+                       status, agent_id, assigned_at, submitted_at, error_message, retry_count)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (item.item_id, item.task_id, item.slot_index, item.language,
+                     item.persona, item.topic, item.skill, item.status.value,
+                     item.agent_id, item.assigned_at, item.submitted_at,
+                     item.error_message, item.retry_count),
+                )
+            conn.commit()
+        return len(items)
+
+    def strip_work_items(self, task_id: str, target_count: int) -> int:
+        to_remove: List[str] = []
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT item_id FROM work_items WHERE task_id = ? AND status = 'pending' ORDER BY slot_index DESC",
+                (task_id,),
+            ).fetchall()
+            to_remove = [r[0] for r in rows]
+            excess = max(0, len(to_remove) - (target_count - self._count_non_pending(conn, task_id)))
+            remove_ids = to_remove[:excess]
+            for rid in remove_ids:
+                conn.execute("DELETE FROM work_items WHERE item_id = ?", (rid,))
+            conn.commit()
+        return len(remove_ids)
+
+    def _count_non_pending(self, conn, task_id: str) -> int:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM work_items WHERE task_id = ? AND status != 'pending'",
+            (task_id,),
+        ).fetchone()
+        return row[0] if row else 0
+
     def get_task_count(self, task_id: str) -> tuple:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT total_items, completed_items, failed_items FROM gen_tasks WHERE task_id = ?",
                 (task_id,),
@@ -200,12 +243,13 @@ class GenDatabase:
     def pull_work_items(self, agent_id: str, batch_size: int, timeout_seconds: int) -> List[WorkItem]:
         self._recycle_timed_out_items(timeout_seconds)
         now = datetime.now().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
                 """SELECT item_id, task_id, slot_index, language, persona, topic, skill,
                    status, agent_id, assigned_at, submitted_at, error_message, retry_count
                    FROM work_items WHERE status = 'pending'
+                   AND task_id IN (SELECT task_id FROM gen_tasks WHERE status NOT IN ('cancelled', 'paused'))
                    ORDER BY ROWID LIMIT ?""",
                 (batch_size,),
             )
@@ -228,7 +272,7 @@ class GenDatabase:
 
     def _recycle_timed_out_items(self, timeout_seconds: int):
         cutoff = (datetime.now() - timedelta(seconds=timeout_seconds)).isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL
                    WHERE status = 'assigned' AND assigned_at < ?""",
@@ -236,16 +280,11 @@ class GenDatabase:
             )
             conn.commit()
 
-    def submit_result(
-        self,
-        item_id: str,
-        agent_id: str,
-        data: dict,
-    ) -> tuple:
-        with sqlite3.connect(self.db_path) as conn:
+    def submit_result(self, item_id: str, agent_id: str, data: dict) -> tuple:
+        with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             item_row = conn.execute(
-                "SELECT item_id, task_id, assigned_at FROM work_items WHERE item_id = ? AND agent_id = ?",
+                "SELECT item_id, task_id FROM work_items WHERE item_id = ? AND agent_id = ?",
                 (item_id, agent_id),
             ).fetchone()
             if not item_row:
@@ -289,14 +328,19 @@ class GenDatabase:
                 (now, item_id),
             )
 
-            total, completed, failed = 0, 0, 0
-            task_row = conn.execute(
-                "SELECT total_items, completed_items, failed_items FROM gen_tasks WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if task_row:
-                total, completed, failed = task_row[0], task_row[1], task_row[2]
+            self._inc_task_completed(conn, task_id, now)
+            conn.commit()
 
+        self._heartbeat(agent_id)
+        return True, "Submitted and validated", record_count
+
+    def _inc_task_completed(self, conn, task_id: str, now: str):
+        task_row = conn.execute(
+            "SELECT total_items, completed_items, failed_items FROM gen_tasks WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()
+        if task_row:
+            total, completed, failed = task_row[0], task_row[1], task_row[2]
             completed += 1
             conn.execute(
                 "UPDATE gen_tasks SET completed_items = ?, updated_at = ? WHERE task_id = ?",
@@ -308,23 +352,17 @@ class GenDatabase:
                     (now, task_id),
                 )
 
-            conn.commit()
-
-        self._heartbeat(agent_id)
-        return True, "Submitted and validated", record_count
-
     def mark_work_item_failed(self, item_id: str, agent_id: str, error_message: str):
         now = datetime.now().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
-                """UPDATE work_items SET status = 'failed', error_message = ?, submitted_at = ?
+                """UPDATE work_items SET status = 'failed', error_message = ?,
+                   retry_count = retry_count + 1, submitted_at = ?
                    WHERE item_id = ? AND agent_id = ?""",
                 (error_message, now, item_id, agent_id),
             )
-
             task_row = conn.execute(
-                "SELECT task_id, completed_items, failed_items, total_items FROM work_items WHERE item_id = ?",
-                (item_id,),
+                "SELECT task_id FROM work_items WHERE item_id = ?", (item_id,),
             ).fetchone()
             if task_row:
                 task_id = task_row[0]
@@ -347,8 +385,63 @@ class GenDatabase:
             conn.commit()
         self._heartbeat(agent_id)
 
+    def retry_failed_items(self, task_id: str) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL,
+                   error_message = NULL
+                   WHERE task_id = ? AND status = 'failed'""",
+                (task_id,),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def release_work_items(self, agent_id: str, item_ids: Optional[List[str]] = None) -> int:
+        with self._connect() as conn:
+            if item_ids:
+                placeholders = ",".join("?" * len(item_ids))
+                cursor = conn.execute(
+                    f"""UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL
+                        WHERE status = 'assigned' AND agent_id = ?
+                        AND item_id IN ({placeholders})""",
+                    [agent_id] + item_ids,
+                )
+            else:
+                cursor = conn.execute(
+                    """UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL
+                       WHERE status = 'assigned' AND agent_id = ?""",
+                    (agent_id,),
+                )
+            conn.commit()
+            return cursor.rowcount
+
+    def get_work_item(self, item_id: str) -> Optional[WorkItem]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT item_id, task_id, slot_index, language, persona, topic, skill,
+                   status, agent_id, assigned_at, submitted_at, error_message, retry_count
+                   FROM work_items WHERE item_id = ?""",
+                (item_id,),
+            ).fetchone()
+        if row:
+            return self._row_to_work_item(row)
+        return None
+
+    def list_work_items(self, task_id: str, status_filter: Optional[str] = None) -> List[WorkItem]:
+        query = """SELECT item_id, task_id, slot_index, language, persona, topic, skill,
+                   status, agent_id, assigned_at, submitted_at, error_message, retry_count
+                   FROM work_items WHERE task_id = ?"""
+        params: list = [task_id]
+        if status_filter:
+            query += " AND status = ?"
+            params.append(status_filter)
+        query += " ORDER BY slot_index"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._row_to_work_item(r) for r in rows]
+
     def get_task_records(self, task_id: str, limit: int = 1000) -> List[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 "SELECT record_data FROM submitted_records WHERE task_id = ? ORDER BY id LIMIT ?",
                 (task_id, limit),
@@ -356,32 +449,61 @@ class GenDatabase:
         return [json.loads(r[0]) for r in rows]
 
     def get_task_records_count(self, task_id: str) -> int:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) FROM submitted_records WHERE task_id = ?", (task_id,)
             ).fetchone()
         return row[0] if row else 0
 
     def cancel_task(self, task_id: str) -> bool:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT status FROM gen_tasks WHERE task_id = ?", (task_id,)
             ).fetchone()
-            if not row or row[0] not in ("pending", "running"):
+            if not row or row[0] not in ("pending", "running", "paused"):
                 return False
             conn.execute(
                 "UPDATE gen_tasks SET status = 'cancelled', updated_at = ? WHERE task_id = ?",
                 (datetime.now().isoformat(), task_id),
             )
             conn.execute(
-                "UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL WHERE task_id = ? AND status = 'assigned'",
+                """UPDATE work_items SET status = 'pending', agent_id = NULL, assigned_at = NULL
+                   WHERE task_id = ? AND status = 'assigned'""",
                 (task_id,),
             )
             conn.commit()
         return True
 
+    def pause_task(self, task_id: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT status FROM gen_tasks WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if not row or row[0] != "running":
+                return False
+            conn.execute(
+                "UPDATE gen_tasks SET status = 'paused', updated_at = ? WHERE task_id = ?",
+                (datetime.now().isoformat(), task_id),
+            )
+            conn.commit()
+        return True
+
+    def resume_task(self, task_id: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT status FROM gen_tasks WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if not row or row[0] != "paused":
+                return False
+            conn.execute(
+                "UPDATE gen_tasks SET status = 'running', updated_at = ? WHERE task_id = ?",
+                (datetime.now().isoformat(), task_id),
+            )
+            conn.commit()
+        return True
+
     def get_stats(self) -> dict:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             status_row = conn.execute(
                 "SELECT status, COUNT(*) FROM gen_tasks GROUP BY status"
             ).fetchall()
@@ -395,12 +517,7 @@ class GenDatabase:
                 "SELECT agent_id, last_seen, items_processed, items_failed FROM agent_heartbeats ORDER BY last_seen DESC"
             ).fetchall()
             agents = [
-                {
-                    "agent_id": r[0],
-                    "last_seen": r[1],
-                    "items_processed": r[2],
-                    "items_failed": r[3],
-                }
+                {"agent_id": r[0], "last_seen": r[1], "items_processed": r[2], "items_failed": r[3]}
                 for r in agent_rows
             ]
 
@@ -414,7 +531,7 @@ class GenDatabase:
 
     def _heartbeat(self, agent_id: str):
         now = datetime.now().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO agent_heartbeats (agent_id, last_seen, items_processed, items_failed)
                    VALUES (?, ?, 0, 0)
@@ -425,7 +542,7 @@ class GenDatabase:
 
     def increment_agent_stats(self, agent_id: str, success: bool):
         field = "items_processed" if success else "items_failed"
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 f"UPDATE agent_heartbeats SET {field} = {field} + 1, last_seen = ? WHERE agent_id = ?",
                 (datetime.now().isoformat(), agent_id),
@@ -462,11 +579,8 @@ class GenDatabase:
         request_json = row[4] if isinstance(row[4], str) else json.dumps(row[4])
         request = CreateTaskRequest.from_dict(json.loads(request_json))
         return GenTask(
-            task_id=row[0],
-            name=row[1],
-            generator_type=row[2],
-            status=TaskStatus(row[3]),
-            request=request,
+            task_id=row[0], name=row[1], generator_type=row[2],
+            status=TaskStatus(row[3]), request=request,
             total_items=row[5] if len(row) > 5 else 0,
             completed_items=row[6] if len(row) > 6 else 0,
             failed_items=row[7] if len(row) > 7 else 0,

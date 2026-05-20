@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 class TaskStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
+    PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -163,6 +164,35 @@ class SubmitResult:
     message: str = ""
     record_count: int = 0
     validation_errors: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class UpdateTaskRequest:
+    generator_type: Optional[str] = None
+    count: Optional[int] = None
+    language_ratios: Optional[Dict[str, float]] = None
+    temperature: Optional[float] = None
+    concurrency: Optional[int] = None
+    selected_topics: Optional[List[str]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UpdateTaskRequest":
+        known = {f.name for f in cls.__dataclass_fields__.values()}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+
+@dataclass
+class GeneratorInfo:
+    id: str
+    name: str
+    description: str
+    level: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

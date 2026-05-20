@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data_gen_skill.models import CreateTaskRequest, LanguageRatios
+from data_gen_skill.models import CreateTaskRequest, LanguageRatios, UpdateTaskRequest
 from data_gen_skill.dispatcher import GenTaskDispatcher
 from data_gen_skill.schema_validator import validate, format_result
 from data_gen_skill.worker import MockAgentWorker
@@ -245,6 +245,196 @@ def test_get_stats():
     return True
 
 
+def test_update_task():
+    print("=" * 60)
+    print("测试 6: 更新任务配置")
+    print("=" * 60)
+
+    d = GenTaskDispatcher()
+    db, db_path = _make_db("update")
+    d.db = db
+
+    task = d.create_task(CreateTaskRequest(generator_type="clarify_skill", count=5))
+    print(f"创建: {task.task_id} count=5")
+    assert task.total_items == 5
+
+    update = UpdateTaskRequest(count=8)
+    result = d.update_task(task.task_id, update)
+    assert result["success"]
+    print("✅ count: 5→8")
+
+    updated = d.get_task(task.task_id)
+    assert updated["total_items"] == 8
+    print("✅ total_items 已更新为 8")
+
+    update2 = UpdateTaskRequest(count=3)
+    d.update_task(task.task_id, update2)
+    updated2 = d.get_task(task.task_id)
+    assert updated2["total_items"] == 3
+    print("✅ count: 8→3 (缩减)")
+
+    update3 = UpdateTaskRequest(temperature=0.9)
+    d.update_task(task.task_id, update3)
+    print("✅ temperature: 0.7→0.9")
+
+    d.cancel_task(task.task_id)
+    update4 = UpdateTaskRequest(count=10)
+    result4 = d.update_task(task.task_id, update4)
+    assert not result4["success"]
+    print("✅ 已取消任务不可修改")
+
+    _cleanup(db_path)
+    print()
+    return True
+
+
+def test_pause_resume():
+    print("=" * 60)
+    print("测试 7: 暂停/恢复任务")
+    print("=" * 60)
+
+    d = GenTaskDispatcher()
+    db, db_path = _make_db("pause")
+    d.db = db
+
+    task = d.create_task(CreateTaskRequest(generator_type="clarify_skill", count=10))
+    print(f"创建: {task.task_id}")
+
+    items = d.pull_work_items("agent_x", batch_size=3)
+    assert len(items) == 3
+    print("✅ 暂停前可拉取")
+
+    result = d.pause_task(task.task_id)
+    assert result["success"]
+    print("✅ 暂停成功")
+
+    items2 = d.pull_work_items("agent_x", batch_size=3)
+    assert len(items2) == 0
+    print("✅ 暂停后不可拉取")
+
+    result3 = d.resume_task(task.task_id)
+    assert result3["success"]
+    print("✅ 恢复成功")
+
+    items4 = d.pull_work_items("agent_y", batch_size=3)
+    assert len(items4) > 0
+    print("✅ 恢复后可拉取")
+
+    _cleanup(db_path)
+    print()
+    return True
+
+
+def test_retry_and_release():
+    print("=" * 60)
+    print("测试 8: 重试失败 + Agent 释放工作项")
+    print("=" * 60)
+
+    d = GenTaskDispatcher()
+    db, db_path = _make_db("retry")
+    d.db = db
+
+    task = d.create_task(CreateTaskRequest(generator_type="clarify_skill", count=5))
+    items = d.pull_work_items("agent_x", batch_size=5)
+    assert len(items) == 5
+
+    for item in items[:2]:
+        d.submit_result("agent_x", item["item_id"], {"bad": "data"})
+
+    items_status = d.list_work_items(task.task_id, "failed")
+    assert len(items_status) == 2
+    print("✅ 2个失败项已被标记")
+
+    retry_result = d.retry_failed_items(task.task_id)
+    assert retry_result["retried_count"] == 2
+    print("✅ 2个失败项已重置为 pending")
+
+    items_pending = d.list_work_items(task.task_id, "pending")
+    assert len(items_pending) == 2
+    print("✅ pending 中恢复为 2")
+
+    release_result = d.release_work_items("agent_x")
+    assert release_result["released_count"] >= 3
+    print(f"✅ Agent 释放了 {release_result['released_count']} 个项目")
+
+    _cleanup(db_path)
+    print()
+    return True
+
+
+def test_list_generators():
+    print("=" * 60)
+    print("测试 9: 列出生成器")
+    print("=" * 60)
+
+    d = GenTaskDispatcher()
+    db, db_path = _make_db("gens")
+    d.db = db
+
+    gens = d.list_generators()
+    assert len(gens) > 0
+    for g in gens[:5]:
+        print(f"  - {g['id']}: {g['name']} (L{g.get('level', '?')})")
+    print(f"✅ 共 {len(gens)} 个可用生成器")
+    assert any(g["id"] == "clarify_skill" for g in gens)
+
+    _cleanup(db_path)
+    print()
+    return True
+
+
+def test_export_data():
+    print("=" * 60)
+    print("测试 10: 多格式导出")
+    print("=" * 60)
+
+    d = GenTaskDispatcher()
+    db, db_path = _make_db("export")
+    d.db = db
+
+    task = d.create_task(CreateTaskRequest(generator_type="clarify_skill", count=3))
+    items = d.pull_work_items("agent_x", batch_size=3)
+    worker = MockAgentWorker("agent_x", d)
+    for item in items:
+        data = worker.generate_for_item(item)
+        d.submit_result("agent_x", item["item_id"], data)
+
+    import tempfile
+    export_path = str(Path(tempfile.gettempdir()) / f"test_export_{task.task_id}.jsonl")
+    result = d.export_data(task.task_id, "jsonl", export_path)
+    assert result["success"]
+    assert Path(export_path).exists()
+    count = sum(1 for _ in open(export_path, "r", encoding="utf-8"))
+    print(f"✅ jsonl 导出: {count} 行 → {export_path}")
+    Path(export_path).unlink(missing_ok=True)
+
+    _cleanup(db_path)
+    print()
+    return True
+
+
+def test_semantic_validation():
+    print("=" * 60)
+    print("测试 11: 增强语义验证")
+    print("=" * 60)
+
+    worker = MockAgentWorker("test", None)
+    valid_data = worker.generate_for_item({"task_id": "test_clarify", "language": "zh"})
+
+    result = validate("clarify_skill", valid_data)
+    print(format_result(result))
+    assert result.passed
+
+    has_tts_warning = any("TTS tag coverage" in w for w in result.warnings)
+    has_eng_warning = any("Non-English thought" in w for w in result.warnings)
+    print(f"  TTS覆盖率warning: {has_tts_warning}")
+    print(f"  非英文thought warning: {has_eng_warning}")
+    print("✅ 语义级检查运行正常")
+
+    print()
+    return True
+
+
 def main():
     print("V4 独立数据生成 Skill 集成测试")
     print("=" * 60)
@@ -257,6 +447,12 @@ def main():
         ("提交+校验+入库", test_submit_and_validate),
         ("多Agent并发", test_concurrent_agents),
         ("系统统计", test_get_stats),
+        ("更新任务配置", test_update_task),
+        ("暂停/恢复", test_pause_resume),
+        ("重试+释放", test_retry_and_release),
+        ("列出生成器", test_list_generators),
+        ("多格式导出", test_export_data),
+        ("语义验证", test_semantic_validation),
     ]
 
     for name, test_fn in tests:

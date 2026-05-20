@@ -160,7 +160,59 @@ def validate(generator_type: str, data: dict) -> ValidationResult:
         result = ValidationResult()
         result.add_error(f"Unknown generator type: {generator_type}")
         return result
-    return validator(data)
+    result = validator(data)
+    _check_semantic_quality(data, result)
+    return result
+
+
+def _check_semantic_quality(data: dict, result: ValidationResult):
+    all_dialogues = []
+    for key in data:
+        if isinstance(data[key], dict) and "dialogue" in data[key]:
+            all_dialogues.extend(data[key]["dialogue"])
+
+    if not all_dialogues:
+        return
+
+    total_turns = len(all_dialogues)
+    user_turns = [t for t in all_dialogues if t.get("role") == "user"]
+    assistant_turns = [t for t in all_dialogues if t.get("role") == "assistant"]
+
+    if total_turns > 0 and len(user_turns) == 0:
+        result.add_warning("No user turns found in dialogue")
+    if total_turns > 0 and len(assistant_turns) == 0:
+        result.add_warning("No assistant turns found in dialogue")
+
+    tts_count = 0
+    respond_count = 0
+    for turn in assistant_turns:
+        respond = turn.get("respond", "")
+        if respond:
+            respond_count += 1
+            if "{V:" in respond:
+                tts_count += 1
+
+    if respond_count > 0:
+        tts_ratio = tts_count / respond_count
+        if tts_ratio < 0.8:
+            result.add_warning(f"TTS tag coverage: {tts_ratio:.0%} (expected >= 80%)")
+
+    thought_english_issues = 0
+    thought_total = 0
+    for turn in assistant_turns:
+        thoughts = turn.get("thought", [])
+        for t in thoughts:
+            if isinstance(t, dict):
+                for key in ["observation", "reasoning"]:
+                    val = t.get(key, "")
+                    if val and isinstance(val, str) and not _is_likely_english(val):
+                        thought_english_issues += 1
+                    thought_total += 1
+
+    if thought_total > 0 and thought_english_issues > 0:
+        ratio = thought_english_issues / thought_total
+        if ratio > 0.3:
+            result.add_warning(f"Non-English thought ratio: {ratio:.0%} (expected < 30%)")
 
 
 def _validate_dialogue(

@@ -248,6 +248,132 @@ class DataGenSkillMCP:
         return [types.TextContent(type="text", text=json.dumps({"success": True, "stats": stats}, ensure_ascii=False, indent=2))]
 
     @tool(
+        name="update_gen_task",
+        description="Update an existing task's configuration: count, language ratios, generator type, temperature, topics. Cannot update completed or cancelled tasks.",
+        schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID to update"},
+                "generator_type": {"type": "string", "description": "New generator type"},
+                "count": {"type": "integer", "description": "New total count (resizes work items)"},
+                "language_ratios": {"type": "object", "description": "New language distribution"},
+                "temperature": {"type": "number", "description": "New LLM temperature"},
+                "concurrency": {"type": "integer", "description": "New concurrency"},
+                "selected_topics": {"type": "array", "items": {"type": "string"}, "description": "New topic list"},
+            },
+            "required": ["task_id"],
+        },
+    )
+    async def update_gen_task(self, task_id: str, **kwargs) -> list[types.TextContent]:
+        from .models import UpdateTaskRequest
+        update = UpdateTaskRequest(
+            generator_type=kwargs.get("generator_type"),
+            count=kwargs.get("count"),
+            language_ratios=kwargs.get("language_ratios"),
+            temperature=kwargs.get("temperature"),
+            concurrency=kwargs.get("concurrency"),
+            selected_topics=kwargs.get("selected_topics"),
+        )
+        result = self.dispatcher.update_task(task_id, update)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+    @tool(
+        name="pause_gen_task",
+        description="Pause a running task. Agents will stop receiving work items from this task.",
+        schema={"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
+    )
+    async def pause_gen_task(self, task_id: str) -> list[types.TextContent]:
+        result = self.dispatcher.pause_task(task_id)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+    @tool(
+        name="resume_gen_task",
+        description="Resume a paused task. Agents can pull work items again.",
+        schema={"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
+    )
+    async def resume_gen_task(self, task_id: str) -> list[types.TextContent]:
+        result = self.dispatcher.resume_task(task_id)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+    @tool(
+        name="list_generators",
+        description="List all available generator types with descriptions. Use this before creating a task.",
+        schema={"type": "object", "properties": {}},
+    )
+    async def list_generators(self) -> list[types.TextContent]:
+        generators = self.dispatcher.list_generators()
+        return [types.TextContent(type="text", text=json.dumps({"success": True, "generators": generators}, ensure_ascii=False, indent=2))]
+
+    @tool(
+        name="retry_work_items",
+        description="Reset all failed work items in a task back to pending status so they can be retried.",
+        schema={"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
+    )
+    async def retry_work_items(self, task_id: str) -> list[types.TextContent]:
+        result = self.dispatcher.retry_failed_items(task_id)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+    @tool(
+        name="release_work_items",
+        description="Agent releases assigned work items back to the pool. Use when agent disconnects or cannot complete.",
+        schema={
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "description": "Agent identifier"},
+                "item_ids": {"type": "array", "items": {"type": "string"}, "description": "Specific items to release (empty = release all)"},
+            },
+            "required": ["agent_id"],
+        },
+    )
+    async def release_work_items(self, agent_id: str, item_ids: list = None) -> list[types.TextContent]:
+        result = self.dispatcher.release_work_items(agent_id, item_ids)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+    @tool(
+        name="get_work_item",
+        description="Get a specific work item's details including status and error messages.",
+        schema={"type": "object", "properties": {"item_id": {"type": "string"}}, "required": ["item_id"]},
+    )
+    async def get_work_item(self, item_id: str) -> list[types.TextContent]:
+        item = self.dispatcher.get_work_item(item_id)
+        if item is None:
+            return [types.TextContent(type="text", text=json.dumps({"success": False, "error": "Item not found"}, ensure_ascii=False))]
+        return [types.TextContent(type="text", text=json.dumps({"success": True, "item": item}, ensure_ascii=False, indent=2))]
+
+    @tool(
+        name="list_work_items",
+        description="List work items for a task, optionally filtered by status.",
+        schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID"},
+                "status_filter": {"type": "string", "description": "Filter by status: pending, assigned, submitted, validated, failed"},
+            },
+            "required": ["task_id"],
+        },
+    )
+    async def list_work_items(self, task_id: str, status_filter: str = None) -> list[types.TextContent]:
+        items = self.dispatcher.list_work_items(task_id, status_filter)
+        return [types.TextContent(type="text", text=json.dumps({"success": True, "task_id": task_id, "count": len(items), "items": items}, ensure_ascii=False, indent=2))]
+
+    @tool(
+        name="export_data",
+        description="Export generated data for a task. Supports jsonl and rwkv formats.",
+        schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID to export"},
+                "format": {"type": "string", "description": "Export format: jsonl or rwkv", "default": "jsonl"},
+                "output_path": {"type": "string", "description": "Output file path (auto-generated if empty)"},
+            },
+            "required": ["task_id"],
+        },
+    )
+    async def export_data(self, task_id: str, format: str = "jsonl", output_path: str = None) -> list[types.TextContent]:
+        result = self.dispatcher.export_data(task_id, format, output_path)
+        return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+    @tool(
         name="export_rwkv",
         description="Export generated data for a task to RWKV training format.",
         schema={

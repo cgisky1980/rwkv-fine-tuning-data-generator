@@ -12,9 +12,11 @@ from .models import (
     TaskStatus,
     WorkItemStatus,
     CreateTaskRequest,
+    UpdateTaskRequest,
     GenTask,
     WorkItem,
     SubmitResult,
+    GeneratorInfo,
     AgentInfo,
     LanguageRatios,
 )

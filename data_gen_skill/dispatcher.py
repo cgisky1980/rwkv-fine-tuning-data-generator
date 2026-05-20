@@ -18,9 +18,11 @@ from .models import (
     TaskStatus,
     WorkItemStatus,
     CreateTaskRequest,
+    UpdateTaskRequest,
     GenTask,
     WorkItem,
     SubmitResult,
+    GeneratorInfo,
     LanguageRatios,
 )
 from .schema_validator import validate, format_result
@@ -58,9 +60,11 @@ class GenTaskDispatcher:
         task.status = TaskStatus.RUNNING
         return task
 
-    def _build_work_items(self, task_id: str, request: CreateTaskRequest) -> List[WorkItem]:
+    def _build_work_items(self, task_id: str, request: CreateTaskRequest, start_index: int = 0) -> List[WorkItem]:
         lang_ratios = request.language_ratios or LanguageRatios()
         total = request.count
+        if start_index > 0:
+            total = total - start_index
 
         lang_alloc = self._allocate_languages(lang_ratios, total)
         topics = self._load_topics(request.selected_topics)
@@ -68,7 +72,7 @@ class GenTaskDispatcher:
         skills = self._load_skills()
 
         items = []
-        slot_index = 0
+        slot_index = start_index
 
         for lang, lang_count in lang_alloc.items():
             remaining = lang_count
@@ -195,16 +199,15 @@ class GenTaskDispatcher:
         ).to_dict()
 
     def _get_work_item(self, item_id: str) -> Optional[WorkItem]:
-        with __import__("sqlite3").connect(self.db.db_path) as conn:
-            row = conn.execute(
-                """SELECT item_id, task_id, slot_index, language, persona, topic, skill,
-                   status, agent_id, assigned_at, submitted_at, error_message, retry_count
-                   FROM work_items WHERE item_id = ?""",
-                (item_id,),
-            ).fetchone()
-        if row:
-            return GenDatabase._row_to_work_item(row)
-        return None
+        return self.db.get_work_item(item_id)
+
+    def get_work_item(self, item_id: str) -> Optional[dict]:
+        item = self.db.get_work_item(item_id)
+        return item.to_dict() if item else None
+
+    def list_work_items(self, task_id: str, status_filter: Optional[str] = None) -> List[dict]:
+        items = self.db.list_work_items(task_id, status_filter)
+        return [i.to_dict() for i in items]
 
     def get_task(self, task_id: str) -> Optional[dict]:
         task = self.db.get_task(task_id)
@@ -216,11 +219,139 @@ class GenTaskDispatcher:
         tasks = self.db.list_tasks(status_filter, limit)
         return [t.to_dict() for t in tasks]
 
+    def update_task(self, task_id: str, update: UpdateTaskRequest) -> dict:
+        task = self.db.get_task(task_id)
+        if not task:
+            return {"success": False, "error": "Task not found"}
+
+        if task.status in (TaskStatus.COMPLETED, TaskStatus.CANCELLED):
+            return {"success": False, "error": f"Cannot update {task.status.value} task"}
+
+        if task.status == TaskStatus.FAILED:
+            pass
+
+        request = task.request
+        changes = []
+
+        if update.generator_type is not None and update.generator_type != request.generator_type:
+            request.generator_type = update.generator_type
+            changes.append(f"generator_type={update.generator_type}")
+
+        if update.temperature is not None:
+            request.temperature = update.temperature
+            changes.append(f"temperature={update.temperature}")
+
+        if update.concurrency is not None:
+            request.concurrency = update.concurrency
+            changes.append(f"concurrency={update.concurrency}")
+
+        if update.selected_topics is not None:
+            request.selected_topics = update.selected_topics
+            changes.append(f"topics={len(update.selected_topics)}")
+
+        if update.language_ratios is not None:
+            request.language_ratios = LanguageRatios.from_dict(update.language_ratios)
+            changes.append("language_ratios")
+
+        if update.count is not None and update.count != request.count:
+            old_count = request.count
+            request.count = update.count
+            changes.append(f"count={update.count}")
+            self._resize_work_items(task_id, request, old_count)
+
+        self.db.update_task_config(task_id, request)
+        return {
+            "success": True,
+            "task_id": task_id,
+            "changes": changes,
+        }
+
+    def _resize_work_items(self, task_id: str, request: CreateTaskRequest, old_count: int):
+        new_count = request.count
+        if new_count > old_count:
+            extra_items = self._build_work_items(task_id, request, start_index=old_count)
+            added = self.db.add_work_items(task_id, extra_items)
+            self.db.update_task_count(task_id, new_count)
+        elif new_count < old_count:
+            removed = self.db.strip_work_items(task_id, new_count)
+            self.db.update_task_count(task_id, new_count)
+
+    def pause_task(self, task_id: str) -> dict:
+        ok = self.db.pause_task(task_id)
+        return {"success": ok, "task_id": task_id, "message": "Paused" if ok else "Task not running"}
+
+    def resume_task(self, task_id: str) -> dict:
+        ok = self.db.resume_task(task_id)
+        return {"success": ok, "task_id": task_id, "message": "Resumed" if ok else "Task not paused"}
+
+    def retry_failed_items(self, task_id: str) -> dict:
+        count = self.db.retry_failed_items(task_id)
+        return {"success": True, "task_id": task_id, "retried_count": count}
+
+    def release_work_items(self, agent_id: str, item_ids: Optional[List[str]] = None) -> dict:
+        count = self.db.release_work_items(agent_id, item_ids)
+        return {"success": True, "agent_id": agent_id, "released_count": count}
+
     def cancel_task(self, task_id: str) -> bool:
         return self.db.cancel_task(task_id)
 
+    def list_generators(self) -> List[dict]:
+        v4_dir = Path(__file__).parent.parent
+        gen_dir = v4_dir / "generators"
+        if not gen_dir.exists():
+            return [GeneratorInfo(id="clarify_skill", name="Clarify Skill", description="Demand clarification + skill call", level="L2").to_dict()]
+
+        infos = []
+        try:
+            import yaml
+            for entry in sorted(gen_dir.iterdir()):
+                if entry.is_dir():
+                    yaml_file = entry / "generator.yaml"
+                    if yaml_file.exists():
+                        with open(yaml_file, "r", encoding="utf-8") as f:
+                            cfg = yaml.safe_load(f) or {}
+                        params = cfg.get("parameters", {})
+                        infos.append(GeneratorInfo(
+                            id=cfg.get("id", entry.name),
+                            name=cfg.get("name", entry.name),
+                            description=cfg.get("description", ""),
+                            level=params.get("level"),
+                        ).to_dict())
+        except Exception:
+            return [GeneratorInfo(id="clarify_skill", name="Clarify Skill", description="Demand clarification + skill call", level="L2").to_dict()]
+
+        return infos or [GeneratorInfo(id="clarify_skill", name="Clarify Skill", description="Demand clarification + skill call", level="L2").to_dict()]
+
     def get_task_records(self, task_id: str, limit: int = 1000) -> List[dict]:
         return self.db.get_task_records(task_id, limit)
+
+    def export_data(self, task_id: str, format: str = "jsonl", output_path: Optional[str] = None) -> dict:
+        if format == "rwkv":
+            return self.export_rwkv(task_id, output_path)
+        if format not in ("jsonl", "rwkv"):
+            return {"success": False, "error": f"Unsupported format: {format}. Use jsonl or rwkv"}
+
+        records = self.db.get_task_records(task_id)
+        if not records:
+            return {"success": False, "error": "No records found for this task"}
+
+        if output_path is None:
+            export_dir = Path(__file__).parent.parent / "data" / "export"
+            export_dir.mkdir(parents=True, exist_ok=True)
+            output_path = str(
+                export_dir / f"export_{task_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            )
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        return {
+            "success": True,
+            "output_file": output_path,
+            "format": format,
+            "records_count": len(records),
+        }
 
     def export_rwkv(self, task_id: str, output_path: Optional[str] = None) -> dict:
         records = self.db.get_task_records(task_id)
